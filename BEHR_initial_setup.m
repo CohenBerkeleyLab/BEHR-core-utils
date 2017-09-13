@@ -1,7 +1,7 @@
 function [  ] = BEHR_initial_setup( )
 %UNTITLED2 Summary of this function goes here
 %   Detailed explanation goes here
-[behr_repo_path, myname] = fileparts(mfilename('fullpath'));
+[behr_utils_repo_path, myname] = fileparts(mfilename('fullpath'));
 
 make_paths_file();
 
@@ -12,8 +12,8 @@ make_paths_file();
         % get two behr_paths.m files.
         paths_filename = 'behr_paths.m';
         template_filename = 'behr_paths_template.m';
-        paths_file = fullfile(behr_repo_path,'Utils','Constants',paths_filename);
-        template_file = fullfile(behr_repo_path,'Utils','Constants',template_filename);
+        paths_file = fullfile(behr_utils_repo_path,'Utils','Constants',paths_filename);
+        template_file = fullfile(behr_utils_repo_path,'Utils','Constants',template_filename);
         
         if exist(paths_file,'file')
             user_ans = input(sprintf('A %s file already exists in BEHR/Utils/Constants. Replace it? (y to replace, any other key to abort): ', paths_filename), 's');
@@ -56,14 +56,16 @@ make_paths_file();
             
         
         % Local repos/folders
-        paths.classes.comment = sprintf('The Matlab classes repository; it should contain at least the class JLLErrors. May be cloned from share-sat/SAT/BEHR/BEHR_MatlabClasses_GitRepo.git on the file server at %s.', sat_file_server);
-        paths.classes.default = fullfile(behr_repo_path, '..', 'Classes');
-        paths.utils.comment = sprintf('The directory of the general Matlab Utils repository (not the one inside the BEHR repo). May be cloned from share-sat/SAT/BEHR/MiscUtils.git on the file server at %s.', sat_file_server);
-        paths.utils.default = fullfile(behr_repo_path, '..', 'Utils');
-        paths.amf_tools_dir.comment = 'The AMF_tools directory in the BEHR repository on your computer. It should contain the files damf.txt and nmcTmpYr.txt';
-        paths.amf_tools_dir.default = fullfile(behr_repo_path, 'AMF_tools');
-        paths.psm_dir.comment = 'The PSM_Gridding directory in the BEHR repository on your computer. It should contain the files PSM_Main.py and psm_wrapper.m';
-        paths.psm_dir.default = fullfile(behr_repo_path, 'PSM_Gridding');
+        paths.behr_utils.comment = 'The directory of the BEHR-core-utils repository. May be cloned from https://github.com/CohenBerkeleyLab/BEHR-core-utils';
+        paths.behr_utils.default = behr_utils_repo_path;
+        paths.utils.comment = 'The directory of the general Matlab-Gen-Utils repository (not the BEHR-core-utils repo). May be cloned from https://github.com/CohenBerkeleyLab/Matlab-Gen-Utils';
+        paths.utils.default = fullfile(behr_utils_repo_path, '..', 'Matlab-Gen-Utils');
+        paths.amf_tools_dir.comment = 'The AMF_tools directory in the BEHR-core-utils repository on your computer. It should contain the files damf.txt and nmcTmpYr.txt';
+        paths.amf_tools_dir.default = fullfile(behr_utils_repo_path, 'AMF_tools');
+        paths.psm_dir.comment = 'The PSM Gridding repository. It should contain the files PSM_Main.py and psm_wrapper.m. May be cloned from https://github.com/CohenBerkeleyLab/BEHR-PSM-Gridding';
+        paths.psm_dir.default = fullfile(behr_utils_repo_path, '..', 'BEHR-PSM-Gridding');
+        paths.python_interface.comment = 'The MatlabPythonInterface repository. May be cloned from https://github.com/CohenBerkeleyLab/MatlabPythonInterface';
+        paths.python_interface.default = fullfile(behr_utils_repo_path, '..', 'MatlabPythonInterface');
         
         % Matlab file folders
         paths.sp_mat_dir.comment = sprintf('The mounted path to the directory on the file server at %s containing OMI_SP_vX-YZ_yyyymmdd.mat files. The file server should be mounted on your computer.',sat_file_server);
