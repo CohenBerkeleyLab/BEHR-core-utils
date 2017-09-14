@@ -35,13 +35,30 @@ classdef behr_paths_template
     
     properties(Constant=true, Access=private)
         %#ISFILE
+        
+        %#ISCODEDIR
     end
     
     methods(Static=true)
-        function success = ValidatePaths()
+        function success = ValidatePaths(varargin)
+            % BEHR_PATHS.ValidatePaths() checks that all the paths
+            % specified as static properties of this class. Any paths that
+            % are not directories (or files, if the private property
+            % is_field_file is true for that path) are printed. This
+            % function returns true if all paths a valid, false otherwise.
+            %
+            % BEHR_PATHS.ValidatePaths('codeonly') only verifies paths
+            % marked internally a code directories that would be added to
+            % the Matlab path by behr_paths.AddCodePaths().
+            code_only = ismember('codeonly', varargin);
+            
             fns = fieldnames(behr_paths);
             success = true;
             for a=1:numel(fns)
+                if code_only && ~behr_paths.is_code_dir.(fns{a})
+                    continue
+                end
+                
                 if behr_paths.is_field_file.(fns{a})
                     test_type = 'file';
                 else
@@ -63,7 +80,57 @@ classdef behr_paths_template
             end
         end
         
+        function AddCodePaths(varargin)
+            be_quiet = ismember('quiet', varargin);
+            ask_to_save = true;
+            if ismember('nosave', varargin)
+                ask_to_save = false;
+                save_paths = false;
+            elseif ismember('save', varargin)
+                ask_to_save = false;
+                save_paths = true;
+            end
+            
+            if ~behr_paths.ValidatePaths('codeonly')
+                error('path_setup:bad_paths', 'One or more directories specified as code paths are invalid')
+            end
+            
+            if ask_to_save
+                save_paths = strcmpi(input('Permanently add the BEHR code directories to your Matlab path (y to do so, any other answer will not)? ', 's'), 'y');
+            end
+            
+            fns = fieldnames(behr_paths);
+            for a=1:numel(fns)
+                if behr_paths.is_code_dir.(fns{a})
+                    if behr_paths.do_genpath.(fns{a})
+                        paths_to_add = behr_paths.no_git(genpath(behr_paths.(fns{a})));
+                        
+                        print_paths = strsplit(paths_to_add,':');
+                        if ~be_quiet
+                            for b=1:numel(print_paths)
+                                fprintf('Adding %s\n', print_paths{b});
+                            end
+                        end
+                    else
+                        paths_to_add = behr_paths.(fns{a});
+                        if ~be_quiet
+                            fprintf('Adding %s\n', paths_to_add);
+                        end
+                    end
+                    addpath(paths_to_add);
+                end
+            end
+            
+            if save_paths
+                savepath();
+            elseif ~be_quiet
+                fprintf('BEHR paths added to Matlab search path for this session only. To make the change permanent, use "savepath()"\n');
+            end
+        end
+        
         function ListAvailablePaths()
+            % BEHR_PATHS.ListAvailablePaths() prints each path's property
+            % name followed by the path it refers to.
             fns = fieldnames(behr_paths);
             fprintf('Available paths:\n');
             for a=1:numel(fns)
@@ -73,6 +140,25 @@ classdef behr_paths_template
                     fprintf('  %s = {%s}\n', fns{a}, strjoin(behr_paths.(fns{a}), ', '));
                 end
             end
+        end
+    end
+    
+    methods(Static = true, Access = private)
+        function p = no_git(p)
+            if ischar(p)
+                p = strsplit(p,':');
+            elseif ~iscellstr(p)
+                return
+            end
+            
+            % If p is a cell array with only one element, then the return
+            % from strcmp is not a cell array
+            gg = strfind(p, '/.git');
+            if iscell(gg)
+                gg = cellfun('isempty', gg);
+            end
+            xx = gg & ~cellfun('isempty', p);
+            p = strjoin(p(xx),':');
         end
     end
 end

@@ -34,7 +34,11 @@ make_paths_file();
         % you need to allow for multiple paths in a cell array. Including
         % the the field "isfile" (whatever value is set to it) will cause
         % behr_paths.ValidatePaths() to check if a file exists at that
-        % path, rather than a directory.
+        % path, rather than a directory. Including the field "is_code_dir"
+        % will make behr_paths aware that the directory given contains
+        % code, and should be added to the Matlab path on request. If its
+        % value is the string 'norecurse', only that directory (and not its
+        % subfolders) will be added to the path.
         
         sat_file_server = '128.32.208.13';
         wrf_file_server = 'cohenwrfnas.dyn.berkeley.edu';
@@ -56,16 +60,25 @@ make_paths_file();
             
         
         % Local repos/folders
+        paths.behr_core.comment = 'The directory of the BEHR-core repository. May be cloned from https://github.com/CohenBerkeleyLab/BEHR-core';
+        paths.behr_core.default = fullfile(behr_utils_repo_path, '..', 'BEHR-core');
+        paths.behr_core.is_code_dir = true;
         paths.behr_utils.comment = 'The directory of the BEHR-core-utils repository. May be cloned from https://github.com/CohenBerkeleyLab/BEHR-core-utils';
         paths.behr_utils.default = behr_utils_repo_path;
+        paths.behr_utils.is_code_dir = true;
         paths.utils.comment = 'The directory of the general Matlab-Gen-Utils repository (not the BEHR-core-utils repo). May be cloned from https://github.com/CohenBerkeleyLab/Matlab-Gen-Utils';
         paths.utils.default = fullfile(behr_utils_repo_path, '..', 'Matlab-Gen-Utils');
+        paths.utils.is_code_dir = true;
         paths.amf_tools_dir.comment = 'The AMF_tools directory in the BEHR-core-utils repository on your computer. It should contain the files damf.txt and nmcTmpYr.txt';
         paths.amf_tools_dir.default = fullfile(behr_utils_repo_path, 'AMF_tools');
+        % do not need to explicitly add AMF_tools to path, since it is in
+        % the behr_utils repo
         paths.psm_dir.comment = 'The PSM Gridding repository. It should contain the files PSM_Main.py and psm_wrapper.m. May be cloned from https://github.com/CohenBerkeleyLab/BEHR-PSM-Gridding';
         paths.psm_dir.default = fullfile(behr_utils_repo_path, '..', 'BEHR-PSM-Gridding');
+        paths.psm_dir.is_code_dir = 'norecurse';
         paths.python_interface.comment = 'The MatlabPythonInterface repository. May be cloned from https://github.com/CohenBerkeleyLab/MatlabPythonInterface';
         paths.python_interface.default = fullfile(behr_utils_repo_path, '..', 'MatlabPythonInterface');
+        paths.python_interface.is_code_dir = true;
         
         % Matlab file folders
         paths.sp_mat_dir.comment = sprintf('The mounted path to the directory on the file server at %s containing OMI_SP_vX-YZ_yyyymmdd.mat files. The file server should be mounted on your computer.',sat_file_server);
@@ -115,6 +128,8 @@ make_paths_file();
                 write_paths(paths, fid_new);
             elseif strcmp(strtrim(tline), '%#ISFILE')
                 write_is_file_struct(paths, fid_new);
+            elseif strcmp(strtrim(tline), '%#ISCODEDIR')
+                write_iscodedir_structs(paths, fid_new);
             else
                 fprintf(fid_new, '%s\n', tline);
             end
@@ -125,6 +140,19 @@ make_paths_file();
         fclose(fid_new);
         
         fprintf('\n!!! Defaults %s file created at %s. Review it and edit the paths as needed. !!!\n\n', paths_filename, paths_file);
+        
+        fprintf('Trying to add BEHR code paths to Matlab path...\n');
+        addpath(fullfile(behr_utils_repo_path, 'Utils', 'Constants'));
+        try
+            behr_paths.AddCodePaths();
+        catch err
+            if strcmpi(err.identifier, 'path_setup:bad_paths')
+                fprintf('%s\n', err.message);
+                fprintf('Correct the bad paths in %s and then run behr_paths.AddCodePaths()\n', paths_file);
+            else
+                rethrow(err)
+            end
+        end
     end
 
     
@@ -177,24 +205,41 @@ end
 end
 
 function write_is_file_struct(paths, fid)
-is_file = struct;
+is_file_fxn = @(path_struct) isfield(path_struct, 'is_file');
+write_bool_structure(paths, fid, 'is_field_file', is_file_fxn);
+end
+
+function write_iscodedir_structs(paths, fid)
+iscodedir_fxn = @(path_struct) isfield(path_struct, 'is_code_dir');
+do_genpath_fxn = @(path_struct) isfield(path_struct, 'is_code_dir') && ~strcmpi(path_struct.is_code_dir, 'norecurse');
+
+write_bool_structure(paths, fid, 'is_code_dir', iscodedir_fxn);
+fprintf(fid, '\n');
+write_bool_structure(paths, fid, 'do_genpath', do_genpath_fxn);
+end
+
+function write_bool_structure(paths, fid, struct_name, bool_fxn)
+% Write a structure containing each of the paths as fields with a boolean
+% value. "paths" must be the paths structure, fid an open file identifier,
+% struct_name the name you want the struct to have a bool_fxn a handle to a
+% functions that, when given the value of a field in paths returns the
+% boolean value you want stored in the struct for that field.
+bool_struct = struct;
 fns = fieldnames(paths);
 for a=1:numel(fns)
-    if ~isfield(paths.(fns{a}), 'is_file')
-        is_file.(fns{a}) = 'false';
+    if bool_fxn(paths.(fns{a}))
+        bool_struct.(fns{a}) = 'true';
     else
-        is_file.(fns{a}) = 'true';
+        bool_struct.(fns{a}) = 'false';
     end
 end
 
-fprintf(fid,'\t\tis_field_file = struct(');
+fprintf(fid, '\t\t%s = struct(', struct_name);
 for a=1:numel(fns)
     if a < numel(fns)
-        fprintf(fid,'''%s'', %s,...\n\t\t\t', fns{a}, is_file.(fns{a}));
+        fprintf(fid,'''%s'', %s,...\n\t\t\t', fns{a}, bool_struct.(fns{a}));
     else
-        fprintf(fid,'''%s'', %s);\n', fns{a}, is_file.(fns{a}));
+        fprintf(fid,'''%s'', %s);\n', fns{a}, bool_struct.(fns{a}));
     end
 end
-
-
 end
