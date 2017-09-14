@@ -7,11 +7,19 @@ classdef behr_paths_template
     %	list of the paths can be printed by calling
     %	behr_paths.ListAvailablePaths().
     %
+    %   This can also assist in setting up your Matlab search path to find
+    %   all the BEHR code. See the behr_paths.AddCodePaths() method.
+    %
     %	Note that this function should not be added to the BEHR git repo,
     %	as it must be specific to each person's computer. The first time
     %	this is created, you should check that all the paths are correct.
     %	You can verify they exists by calling the
     %	behr_paths.ValidatePaths() method.
+    %
+    %   Also note that this class should only rely on built-in Matlab
+    %   function and not any code that comes with the BEHR or related
+    %   repositories, since it needs to be callable before those functions
+    %   are on the Matlab search path to help users set up the search path.
     
     % Each of the following paths needs to be a local path on your
     % computer. For the code repositories, you will want to clone those

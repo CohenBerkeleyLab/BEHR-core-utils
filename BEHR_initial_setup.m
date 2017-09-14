@@ -1,27 +1,47 @@
 function [  ] = BEHR_initial_setup( )
-%UNTITLED2 Summary of this function goes here
-%   Detailed explanation goes here
-[behr_utils_repo_path, myname] = fileparts(mfilename('fullpath'));
+%BEHR_INITIAL_SETUP Perform the actions necessary to set up BEHR to run
+%   There are several steps to prepare the BEHR algorithm to run:
+%       1) Clone the necessary repositories from GitHub
+%       2) Identify the paths where OMI, MODIS, GLOBE, and WRF-Chem data
+%       reside.
+%       3) Add the necessary code paths to the Matlab search path
+%       4) Build the "omi" Python package included in the BEHR-PSM-Gridding
+%       repository.
+%   If you're reading this, then you should have already done #1. This
+%   function will automatically perform steps 2-4. You may be prompted for
+%   each step, so you must run this function interactively (i.e. it cannot
+%   be run as part of a batch job on a cluster).
+%
+%   NOTE TO DEVELOPERS: This function should only rely on built-in Matlab
+%   functions and not any functions included as part of the BEHR code or
+%   related repositories, since it is intended to be run before any of the
+%   BEHR code has been added to the Matlab path.
 
+[behr_utils_repo_path, myname] = fileparts(mfilename('fullpath'));
+paths_filename = 'behr_paths.m';
+template_filename = 'behr_paths_template.m';
+constants_path = fullfile(behr_utils_repo_path,'Utils','Constants');
+paths_file = fullfile(constants_path,paths_filename);
+template_file = fullfile(constants_path,template_filename);
+        
 make_paths_file();
+add_code_paths();
+build_omi_python();
 
     function make_paths_file
         % Check that behr_paths.m does not already exist anywhere. If there's one
         % in the right place, then ask if we want to overwrite it. If there's one
         % somewhere else, the user will need to move or delete it so that we don't
         % get two behr_paths.m files.
-        paths_filename = 'behr_paths.m';
-        template_filename = 'behr_paths_template.m';
-        paths_file = fullfile(behr_utils_repo_path,'Utils','Constants',paths_filename);
-        template_file = fullfile(behr_utils_repo_path,'Utils','Constants',template_filename);
         
         if exist(paths_file,'file')
             user_ans = input(sprintf('A %s file already exists in BEHR/Utils/Constants. Replace it? (y to replace, any other key to abort): ', paths_filename), 's');
             if ~(strcmpi(user_ans,'Yes') || strcmpi(user_ans, 'y'))
-                error('BEHR_setup:user_cancel','A %s file already exists and you have chosen not to overwrite it.', paths_filename);
+                fprintf('Not overwriting existing paths file.\n');
+                return;
             end
         elseif ~isempty(which(paths_filename))
-            error('BEHR_setup:file_exists','%s exists on your Matlab search path, but at %s, not at BEHR/Utils/Constants. Please delete or move that version to BEHR/Utils/Constants.',paths_filename, which(paths_filename));
+            error('BEHR_setup:file_exists','%1$s exists on your Matlab search path, but at %2$s, not at %3$s. Please delete or move that version to %3$s.',paths_filename, which(paths_filename), constants_path);
         end
         
         % This defines all the paths that should exist in that file. The
@@ -116,6 +136,7 @@ make_paths_file();
         %%%%%%%%%%%%%%%%%%
         % Write the file %
         %%%%%%%%%%%%%%%%%%
+        
         fid_template = fopen(template_file, 'r');
         fid_new = fopen(paths_file, 'w');
         
@@ -140,18 +161,63 @@ make_paths_file();
         fclose(fid_new);
         
         fprintf('\n!!! Defaults %s file created at %s. Review it and edit the paths as needed. !!!\n\n', paths_filename, paths_file);
-        
+    end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Add BEHR paths to Matlab search path %
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    function add_code_paths
+        fprintf('\n');
         fprintf('Trying to add BEHR code paths to Matlab path...\n');
         addpath(fullfile(behr_utils_repo_path, 'Utils', 'Constants'));
         try
             behr_paths.AddCodePaths();
+            input('Press ENTER to continue','s');
         catch err
             if strcmpi(err.identifier, 'path_setup:bad_paths')
                 fprintf('%s\n', err.message);
                 fprintf('Correct the bad paths in %s and then run behr_paths.AddCodePaths()\n', paths_file);
+                input('I will still try to finish the initial setup (Press ENTER to continue)', 's');
             else
                 rethrow(err)
             end
+        end
+    end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Build the omi Python package %
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    function build_omi_python
+        fprintf('\n');
+        build_omi_cmd = 'python setup.py install --user';
+        psm_dir = fullfile(behr_paths.psm_dir, 'omi');
+        
+        if exist(psm_dir, 'dir')
+            fprintf('BEHR relies on the omi Python package. This needs to be built and installed on your Python path.\n');
+            fprintf('I can try to do this for you; I would run:\n\n\t%s\n\nin %s\n', build_omi_cmd, behr_paths.psm_dir);
+            fprintf('Should I try to build the omi package? If not, you can do it manually later.\n');
+            if strcmpi(input('  Enter y to build, anything else to skip: ', 's'), 'y');
+                fprintf('Trying to build the omi package...\n');
+                oldwd = cd(psm_dir);
+                try
+                    [psm_status, psm_result] = system(build_omi_cmd);
+                catch err
+                    cd(oldwd);
+                    rethrow(err);
+                end
+                cd(oldwd);
+                
+                if psm_status == 0
+                    fprintf('%s\n\n', psm_result);
+                    fprintf('Build appears to be successful.\n');
+                else
+                    fprintf('Build failed. Output from install command:\n%s\n', psm_result);
+                end
+            else
+                fprintf('To build the omi package yourself, execute "%s" in %s\n', build_omi_cmd, psm_dir);
+            end
+        else
+            fprintf('The PSM directory (%s) in behr_paths is invalid. Fix that and rerun BEHR_initial_setup, or build the omi package manually.\n', behr_paths.psm_dir);
         end
     end
 
