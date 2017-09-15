@@ -31,14 +31,35 @@ end
 
 data = double(hdfread(filename, dsetname));
 fill_value = double(hdfreadatt(filename, dsetname, '_FillValue'));
-scale_factor = double(hdfreadatt(filename, dsetname, 'scale_factor'));
-offset = double(hdfreadatt(filename, dsetname, 'add_offset'));
+try
+    scale_factor = double(hdfreadatt(filename, dsetname, 'scale_factor'));
+catch err
+    if strcmp(err.identifier, 'hdfreadatt:hdf_attribute')
+        warning('No scale_factor attribute found for %s, setting to 1', dsetname);
+        scale_factor = 1;
+    else
+        rethrow(err)
+    end
+end
 
+try
+    offset = double(hdfreadatt(filename, dsetname, 'add_offset'));
+catch err
+    if strcmp(err.identifier, 'hdfreadatt:hdf_attribute')
+        warning('No add_offset attribute found for %s, setting to 0', dsetname);
+        offset = 0;
+    else
+        rethrow(err);
+    end
+end
 fills = abs((data - fill_value) ./ fill_value) < fill_crit;
 data(fills) = nan;
 
 % This treatment is given by the MODIS MOD06 theoretical basis document, p.
-% 87 (https://modis-atmos.gsfc.nasa.gov/_docs/C6MOD06OPUserGuide.pdf)
+% 87 (https://modis-atmos.gsfc.nasa.gov/_docs/C6MOD06OPUserGuide.pdf) and
+% the metadata for MCD43C1 v006
+% (https://ladsweb.modaps.eosdis.nasa.gov/api/v1/filespec/product=MCD43C1&collection=6,
+% search BRDF_Albedo_Parameter).
 data = (data - offset) * scale_factor;
 
 end

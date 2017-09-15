@@ -43,22 +43,28 @@ make_paths_file();
         paths.amf_tools_dir.default = fullfile(behr_repo_path, 'AMF_tools');
         
         % Matlab file folders
-        paths.sp_mat_dir.comment = sprintf('The mounted path to the directory on the file server at %s containing OMI_SP_vX-YZ_yyyymmdd.mat files. The file server should be mounted on your computer.',sat_file_server);
-        paths.sp_mat_dir.default = fullfile('share-sat', 'SAT', 'OMI', 'SP_Files_2014');
-        paths.behr_mat_dir.comment = sprintf('The mounted path to the directory on the file server at %s containing OMI_BEHR_vX-YZ_yyyymmdd.mat files. The file server should be mounted on your computer.',sat_file_server);
-        paths.behr_mat_dir.default = fullfile('share-sat', 'SAT', 'OMI', 'BEHR_Files_2014');
+        paths.sp_mat_dir.comment = sprintf('The default path where OMI_SP_vX-YZ_yyyymmdd.mat files will be saved and read from. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.sp_mat_dir.default = fullfile(sat_folder, 'SAT', 'BEHR', 'SP_Files_2014');
+        paths.behr_mat_dir.comment = sprintf('The default path where OMI_BEHR_vX-YZ_yyyymmdd.mat files will be saved and read from. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.behr_mat_dir.default = fullfile(sat_folder, 'SAT', 'BEHR', 'BEHR_Files_2014');
         
         % OMI and ancillary data folders
-        paths.omno2_dir.comment = sprintf('The OMNO2 directory on the file server at %s. It should contain folders organized by year and month with OMI-Aura_L2-OMNO2 files in them. The file server should be mounted on your computer.',sat_file_server);
-        paths.omno2_dir.default = fullfile('share-sat', 'SAT', 'OMI', 'OMNO2', 'version_3_3_0');
-        paths.ompixcor_dir.comment = sprintf('The OMPIXCOR directory on the file server at %s. It should contain folders organized by year and month with OMI-Aura_L2-OMNPIXCOR files in them. The file server should be mounted on your computer.',sat_file_server);
-        paths.omno2_dir.default = fullfile('share-sat', 'SAT', 'OMI', 'OMPIXCOR', 'version_003');
-        paths.myd06_dir = sprintf('Please find the MYD06_L2 directory on the file server at %s. It should contain folders for each year with MYD06_L2 files in them. The file server should be mounted on your computer.',sat_file_server);
-        paths.myd06_dir.default = fullfile('share-sat', 'SAT', 'MODIS', 'MYD06_L2');
-        paths.mcd43c1_dir.comment = sprintf('The MCD43C1 directory on the file server at %s. It should contain folders for each year with MCD43C1 files in them. The file server should be mounted on your computer.',sat_file_server);
-        paths.mcd43c1_dir.default = fullfile('share-sat', 'SAT', 'MODIS', 'MCD43C1');
-        paths.globe_dir.comment = sprintf('The GLOBE database directory on the file server at %s. It should contain files a10g through p10g and their .hdr files. The file server should be mounted on your computer.',sat_file_server);
-        paths.globe_dir.default = fullfile('share-sat', 'SAT', 'BEHR','GLOBE_Database');
+        paths.omno2_dir.comment = sprintf('This should contain folders organized by year and month with OMI-Aura_L2-OMNO2 files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.omno2_dir.default = fullfile(sat_folder, 'SAT', 'OMI', 'OMNO2', 'version_3_3_0');
+        paths.ompixcor_dir.comment = sprintf('This should contain folders organized by year and month with OMI-Aura_L2-OMNPIXCOR files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.ompixcor_dir.default = fullfile(sat_folder, 'SAT', 'OMI', 'OMPIXCOR', 'version_003');
+        paths.myd06_dir.comment = sprintf('This should contain folders for each year with MYD06_L2 files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.myd06_dir.default = fullfile(sat_folder, 'SAT', 'MODIS', 'MYD06_L2');
+        paths.mcd43c1_dir.comment = sprintf('This should contain folders for each year with MCD43C1 files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.mcd43c1_dir.default = fullfile(sat_folder, 'SAT', 'MODIS', 'MCD43C1');
+        paths.modis_land_mask.comment = sprintf('This is the "Land_Water_Mask_7Classes_UMD file, available from ftp://rsftp.eeos.umb.edu/data02/Gapfilled/ (as of 21 Sept 2017). For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.modis_land_mask.default = fullfile(sat_folder, 'SAT', 'MODIS', 'Land_Water_Mask_7Classes_UMD.hdf');
+        paths.modis_land_mask.isfile = true;
+        paths.globe_dir.comment = sprintf('This is the folder with the GLOBE database, available from https://www.ngdc.noaa.gov/mgg/topo/gltiles.html (as of 21 Sept 2017). It should contain files a10g through p10g and their .hdr files. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.globe_dir.default = fullfile(sat_folder, 'SAT', 'BEHR','GLOBE_Database');
+
+        paths.website_staging_dir.comment = sprintf('The directory where data should be staged before being put on the folders visible to the website. Also on the file server at %s which should be mounted on your computer.', sat_file_server);
+        paths.website_staging_dir.default = fullfile(sat_folder,'SAT','BEHR','WEBSITE','staging');
         
         % WRF data is spread across multiple volumes locally. It's just too
         % big.
@@ -156,5 +162,69 @@ while i < length(comment)
     str_out = [str_out, tabs, '%% ', strtrim(comment(i:i+j-1)), '\n'];
     %str_out{end+1} = sprintf('%% %s\n',strtrim(comment(i:i+j-1)));
     i = i+j;
+end
+end
+
+function write_paths(paths, fid)
+fns = fieldnames(paths);
+for a=1:numel(fns)
+    if isfield(paths.(fns{a}), 'comment');
+        this_comment = wrap_comment(paths.(fns{a}).comment, 2);
+    else
+        this_comment = wrap_comment(fns{a}, 2);
+    end
+    fprintf(fid, this_comment);
+    
+    if isfield(paths.(fns{a}), 'default')
+        this_default = paths.(fns{a}).default;
+    else
+        this_default = '';
+    end
+    
+    if isfield(paths.(fns{a}), 'no_quote')
+        fprintf(fid, '\t\t%s = %s;\n\n', fns{a}, this_default);
+    else
+        fprintf(fid, '\t\t%s = ''%s'';\n\n', fns{a}, this_default);
+    end
+end
+end
+
+function write_is_file_struct(paths, fid)
+is_file_fxn = @(path_struct) isfield(path_struct, 'isfile');
+write_bool_structure(paths, fid, 'is_field_file', is_file_fxn);
+end
+
+function write_iscodedir_structs(paths, fid)
+iscodedir_fxn = @(path_struct) isfield(path_struct, 'is_code_dir');
+do_genpath_fxn = @(path_struct) isfield(path_struct, 'is_code_dir') && ~strcmpi(path_struct.is_code_dir, 'norecurse');
+
+write_bool_structure(paths, fid, 'is_code_dir', iscodedir_fxn);
+fprintf(fid, '\n');
+write_bool_structure(paths, fid, 'do_genpath', do_genpath_fxn);
+end
+
+function write_bool_structure(paths, fid, struct_name, bool_fxn)
+% Write a structure containing each of the paths as fields with a boolean
+% value. "paths" must be the paths structure, fid an open file identifier,
+% struct_name the name you want the struct to have a bool_fxn a handle to a
+% functions that, when given the value of a field in paths returns the
+% boolean value you want stored in the struct for that field.
+bool_struct = struct;
+fns = fieldnames(paths);
+for a=1:numel(fns)
+    if bool_fxn(paths.(fns{a}))
+        bool_struct.(fns{a}) = 'true';
+    else
+        bool_struct.(fns{a}) = 'false';
+    end
+end
+
+fprintf(fid, '\t\t%s = struct(', struct_name);
+for a=1:numel(fns)
+    if a < numel(fns)
+        fprintf(fid,'''%s'', %s,...\n\t\t\t', fns{a}, bool_struct.(fns{a}));
+    else
+        fprintf(fid,'''%s'', %s);\n', fns{a}, bool_struct.(fns{a}));
+    end
 end
 end
