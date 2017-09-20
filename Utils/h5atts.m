@@ -1,6 +1,22 @@
 function [ attrs ] = h5atts( varargin )
-%UNTITLED Summary of this function goes here
-%   Detailed explanation goes here
+%H5ATTS Lists dataset attributes from and HDF5 file
+%   ATTRS = H5ATTS( INFO, GRP_IND, GRP_IND, ..., DATASET ) Returns the
+%   attributes names as values as strings in the cell array ATTRS for a
+%   dataset in the file represented by the INFO structure, which must be
+%   one returned from H5INFO(). The following arguments, GRP_IND, are the
+%   series of group indices in the hierarchy of the HDF5 file. DATASET is
+%   the index of the dataset (or group) to list attributes for. For
+%   example, if the dataset of interest can be reached with:
+%
+%       info.Groups(1).Groups(2).Groups(1).Datasets(10)
+%
+%   call this function as:
+%
+%       h5atts(info, 1, 2, 1, 10)
+%
+%   ATTRS = H5ATTS( ___, 'unannotated' ) returns the attribute information
+%   instead as a struct, where each field name is an attribute name and the
+%   value the attribute value.
 
 E = JLLErrors;
 
