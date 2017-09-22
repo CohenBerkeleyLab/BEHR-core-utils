@@ -107,24 +107,24 @@ build_omi_python();
         paths.python_interface.is_code_dir = true;
         
         % Matlab file folders
-        paths.sp_mat_dir.comment = sprintf('The mounted path to the directory on the file server at %s containing OMI_SP_vX-YZ_yyyymmdd.mat files. The file server should be mounted on your computer.',sat_file_server);
+        paths.sp_mat_dir.comment = sprintf('The default path where OMI_SP_vX-YZ_yyyymmdd.mat files will be saved and read from. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
         paths.sp_mat_dir.default = fullfile(sat_folder, 'SAT', 'BEHR', 'SP_Files_2014');
-        paths.behr_mat_dir.comment = sprintf('The mounted path to the directory on the file server at %s containing OMI_BEHR_vX-YZ_yyyymmdd.mat files. The file server should be mounted on your computer.',sat_file_server);
+        paths.behr_mat_dir.comment = sprintf('The default path where OMI_BEHR_vX-YZ_yyyymmdd.mat files will be saved and read from. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
         paths.behr_mat_dir.default = fullfile(sat_folder, 'SAT', 'BEHR', 'BEHR_Files_2014');
         
         % OMI and ancillary data folders
-        paths.omno2_dir.comment = sprintf('The OMNO2 directory on the file server at %s. It should contain folders organized by year and month with OMI-Aura_L2-OMNO2 files in them. The file server should be mounted on your computer.',sat_file_server);
+        paths.omno2_dir.comment = sprintf('This should contain folders organized by year and month with OMI-Aura_L2-OMNO2 files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
         paths.omno2_dir.default = fullfile(sat_folder, 'SAT', 'OMI', 'OMNO2', 'version_3_3_0');
-        paths.ompixcor_dir.comment = sprintf('The OMPIXCOR directory on the file server at %s. It should contain folders organized by year and month with OMI-Aura_L2-OMNPIXCOR files in them. The file server should be mounted on your computer.',sat_file_server);
+        paths.ompixcor_dir.comment = sprintf('This should contain folders organized by year and month with OMI-Aura_L2-OMNPIXCOR files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
         paths.ompixcor_dir.default = fullfile(sat_folder, 'SAT', 'OMI', 'OMPIXCOR', 'version_003');
-        paths.myd06_dir.comment = sprintf('Please find the MYD06_L2 directory on the file server at %s. It should contain folders for each year with MYD06_L2 files in them. The file server should be mounted on your computer.',sat_file_server);
+        paths.myd06_dir.comment = sprintf('This should contain folders for each year with MYD06_L2 files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
         paths.myd06_dir.default = fullfile(sat_folder, 'SAT', 'MODIS', 'MYD06_L2');
-        paths.mcd43c1_dir.comment = sprintf('The MCD43C1 directory on the file server at %s. It should contain folders for each year with MCD43C1 files in them. The file server should be mounted on your computer.',sat_file_server);
+        paths.mcd43c1_dir.comment = sprintf('This should contain folders for each year with MCD43C1 files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
         paths.mcd43c1_dir.default = fullfile(sat_folder, 'SAT', 'MODIS', 'MCD43C1');
-        paths.gome2ler_file.comment = sprintf('The GOME-2A LER file on the file server at %s. It has surface reflectances over 21 wavelengths for all 12 months globally.', sat_file_server);
-        paths.gome2ler_file.default = fullfile(sat_folder, 'SAT', 'GOME-2', 'GOME-2_MetOp-A_MSC_025x025_surface_LER_v2.1.hdf5');
-        paths.gome2ler_file.is_file = true;
-        paths.globe_dir.comment = sprintf('The GLOBE database directory on the file server at %s. It should contain files a10g through p10g and their .hdr files. The file server should be mounted on your computer.',sat_file_server);
+        paths.modis_land_mask.comment = sprintf('This is the "Land_Water_Mask_7Classes_UMD file, available from ftp://rsftp.eeos.umb.edu/data02/Gapfilled/ (as of 21 Sept 2017). For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.modis_land_mask.default = fullfile(sat_folder, 'SAT', 'MODIS', 'Land_Water_Mask_7Classes_UMD.hdf');
+        paths.modis_land_mask.isfile = true;
+        paths.globe_dir.comment = sprintf('This is the folder with the GLOBE database, available from https://www.ngdc.noaa.gov/mgg/topo/gltiles.html (as of 21 Sept 2017). It should contain files a10g through p10g and their .hdr files. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
         paths.globe_dir.default = fullfile(sat_folder, 'SAT', 'BEHR','GLOBE_Database');
 
         paths.website_staging_dir.comment = sprintf('The directory where data should be staged before being put on the folders visible to the website. Also on the file server at %s which should be mounted on your computer.', sat_file_server);
@@ -277,7 +277,7 @@ end
 end
 
 function write_is_file_struct(paths, fid)
-is_file_fxn = @(path_struct) isfield(path_struct, 'is_file');
+is_file_fxn = @(path_struct) isfield(path_struct, 'isfile');
 write_bool_structure(paths, fid, 'is_field_file', is_file_fxn);
 end
 
