@@ -46,8 +46,8 @@ try
     offset = double(hdfreadatt(filename, dsetname, 'add_offset'));
 catch err
     if strcmp(err.identifier, 'hdfreadatt:hdf_attribute')
-        warning('No add_offset attribute found for %s, setting to 1', dsetname);
-        offset = 1;
+        warning('No add_offset attribute found for %s, setting to 0', dsetname);
+        offset = 0;
     else
         rethrow(err);
     end
