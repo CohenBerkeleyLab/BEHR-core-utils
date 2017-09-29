@@ -27,16 +27,19 @@ end
 
 function make_test_data(data_dir, save_file)
 F = dirff(fullfile(data_dir, 'OMI_SP*.mat'));
-lon = cell(numel(F),1);
-lat = cell(numel(F),1);
-mon = cell(numel(F),1);
-temp = cell(numel(F),1);
+n = min(5, numel(F)); % limit to 5 files to keep the test data to something we can store on GitHub (< 100 MB)
+
+lon = cell(n,1);
+lat = cell(n,1);
+mon = cell(n,1);
+temp = cell(n,1);
 
 id_str = sprintf('Produced from %d files:\n\t%s', numel(F), strjoin({F.name},'\n\t')); %#ok<NASGU>
 
 fileTmp = fullfile(behr_paths.amf_tools_dir,'nmcTmpYr.txt');
-for a=1:numel(F)
-    fprintf('Calculating temperatures for file %d of %d\n', a, numel(F));
+
+for a=1:n
+    fprintf('Calculating temperatures for file %d of %d\n', a, n);
     D = load(F(a).name);
     Data = D.Data;
     lon{a} = cat_sat_data(Data, 'Longitude');
