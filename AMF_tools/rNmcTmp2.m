@@ -24,6 +24,8 @@
 
 function [temperature, tmpSAVE] = rNmcTmp2(fileTmp,  pressure, lon, lat, mon)
 
+% Longitude in the temperature profile file is defined as degrees east of
+% 0, so -90 in OMI data == 270 here, while +90 in OMI data == +90 here.
 lon=mod(lon,360);
 
 if any(diff(pressure) > 0);
@@ -63,14 +65,12 @@ else
 
     
     %Interpolate onto input pressure grid
+    temperature_interp_horiz = nan([numel(presSAVE), size(lon)]);
     for pres_i=1:length(presSAVE)
-        dum = reshape(tmpSAVE(pres_i,:,:,:), [nLon, nLat, nMon]);
-        %temperature1(:,pres_i)=(interpn(lonSAVE, latSAVE, monSAVE, dum, lon, lat, mon,'linear')); 
-        temperature1(:,:,pres_i)=(interpn(lonSAVE, latSAVE, monSAVE, dum, lon, lat, mon,'linear')); 
+        temperature_slice = reshape(tmpSAVE(pres_i,:,:,:), [nLon, nLat, nMon]);
+        temperature_interp_horiz(pres_i,:,:)=(interpn(lonSAVE, latSAVE, monSAVE, temperature_slice, lon, lat, mon,'linear')); 
     end
-    %temperature=exp(interp1(log(presSAVE),log(temperature1'), log(pressure),'linear','extrap'))';
-    temperature1x=shiftdim(temperature1,2);
-    temperature=exp(interp1(log(presSAVE),log(temperature1x), log(pressure),'linear','extrap'));
+    temperature=exp(interp1(log(presSAVE),log(temperature_interp_horiz), log(pressure),'linear','extrap'));
 end
 
 status = fclose(fid);
