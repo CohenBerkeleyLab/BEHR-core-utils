@@ -1,4 +1,4 @@
-function [ no2_bins, wrf_file ] = rProfile_WRF( date_in, profile_mode, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
+function [ no2_bins, temp_bins, wrf_file ] = rProfile_WRF( date_in, profile_mode, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -122,7 +122,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-[wrf_no2, wrf_pres, wrf_lon, wrf_lat, wrf_file] = load_wrf_vars();
+[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file] = load_wrf_vars();
 
 
 num_profs = numel(wrf_lon);
@@ -130,6 +130,7 @@ prof_length = size(wrf_no2,3);
 
 num_pix = numel(surfPres);
 no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
+temp_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
 
 if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
     error('rProfile_WRF:wrf_dim','wrf_lon and wrf_lat should be 2D');
@@ -156,9 +157,11 @@ perm_vec(3) = [];
 perm_vec = [3, perm_vec];
 
 wrf_no2 = permute(wrf_no2, perm_vec);
+wrf_temp = permute(wrf_temp, perm_vec);
 wrf_pres = permute(wrf_pres, perm_vec);
 
 wrf_no2 = reshape(wrf_no2, prof_length, num_profs);
+wrf_temp = reshape(wrf_temp, prof_length, num_profs);
 wrf_pres = reshape(wrf_pres, prof_length, num_profs);
 wrf_lon = reshape(wrf_lon, 1, num_profs);
 wrf_lat = reshape(wrf_lat, 1, num_profs);
@@ -171,10 +174,11 @@ for p=1:num_pix
         continue
     end
 
-    no2_bins(:,p) = avg_apriori();
+    [no2_bins(:,p), temp_bins(:,p)] = avg_apriori();
+    
 end
 
-    function no2_vec = avg_apriori()
+    function [no2_vec, temp_vec] = avg_apriori()
         xall = loncorns(:,p);
         xall(5) = xall(1);
         
@@ -187,6 +191,7 @@ end
         
         xx = wrf_lon < max(xall) & wrf_lon > min(xall) & wrf_lat < max(yall) & wrf_lat > min(yall);
         tmp_no2 = wrf_no2(:,xx);
+        tmp_temp = wrf_temp(:,xx);
         tmp_pres = wrf_pres(:,xx);
         tmp_lon = wrf_lon(xx);
         tmp_lat = wrf_lat(xx);
@@ -196,36 +201,53 @@ end
         if sum(yy) < 1
             %E.callError('no_prof','WRF Profile not found for pixel near %.1, %.1f',mean(xall),mean(yall));
             no2_vec = nan(length(pressures),1);
+            temp_vec = nan(length(pressures),1);
             return
         end
         
         tmp_no2(:,~yy) = [];
+        tmp_temp(:,~yy) = [];
         tmp_pres(:,~yy) = [];
         
-        % Interpolate all the NO2 profiles to the input pressures, then average
-        % them together. Extrapolate so that later we can be sure to have one
-        % bin below the surface pressure for omiAmfAK2 and integPr2.
-        % Interpolate in log-log space to account for the exponential
-        % dependence of pressure on altitude and the often exponential decrease
-        % of concentration with altitude.
+        % Interpolate all the NO2 and temperature profiles to the input
+        % pressures, then average them. Extrapolate so that later we can be
+        % sure to have one bin below the surface pressure for omiAmfAK2 and
+        % integPr2. Interpolate NO2 in log-log space to account for the
+        % exponential dependence of pressure on altitude and the often
+        % exponential decrease of concentration with altitude. For
+        % temperature, since a lapse rate implicitly assumes a linear
+        % dependence of T on z, and since z is proportional to log(p):
+        %
+        %   z   = H * ln(p0/p)
+        %       = H * ln(p0) - H * ln(p)
+        %       = C - H * ln(p)
+        %   z \propto ln(p)
+        %
+        % therefore, T should be proportional to ln(p)
         
         interp_no2 = nan(length(pressures), size(tmp_no2,2));
+        interp_temp = nan(length(pressures), size(tmp_temp,2));
         
         if ~iscolumn(pressures); pressures = pressures'; end
         
         for a=1:size(tmp_no2,2)
             interp_no2(:,a) = interp1(log(tmp_pres(:,a)), log(tmp_no2(:,a)), log(pressures), 'linear', 'extrap');
+            interp_temp(:,a) = interp1(log(tmp_pres(:,a)), tmp_temp(:,a), log(pressures), 'linear', 'extrap');
         end
         
         interp_no2 = exp(interp_no2);
+        % do not need exp(interp_temp) since did not take the log of
+        % tmp_temp
         
         last_below_surf = find(pressures > surfPres(p),1,'last')-1;
         interp_no2(1:last_below_surf,:) = nan;
+        interp_temp(1:last_below_surf,:) = nan;
         
         no2_vec = nanmean(interp_no2,2);
+        temp_vec = nanmean(interp_temp,2);
     end
 
-    function [wrf_no2, wrf_pres, wrf_lon, wrf_lat, file_name] = load_wrf_vars()
+    function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, file_name] = load_wrf_vars()
         % Find the file for this day and the nearest hour May be "wrfout" or
         % "wrfout_subset"
         year_in = year(date_num_in);
@@ -288,9 +310,26 @@ end
         
         wrf_vars = {wrf_info.Variables.Name};
         pres_precomputed = ismember('pres', wrf_vars);
+        temp_precomputed = ismember('TT', wrf_vars);
         
         % Load the remaining variables
         try
+            % TT is a custom variable that can be created using
+            % calculated_quantities.nco or calculated_met_quantities.nco in
+            % the WRF-nco-utils repo
+            % (https://github.com/CohenBerkeleyLab/WRF-nco-tools). It
+            % converts from WRF's perturbation to potential temperature to
+            % an absolute temperature
+            if temp_precomputed
+                wrf_temp = ncread(wrf_info.Filename, 'TT');
+                temp_units = ncreadatt(wrf_info.Filename, 'TT', 'units');
+                if ~strcmp(temp_units, 'K')
+                    E.notimplemented('WRF temperature not in Kelvin');
+                end
+            else
+                wrf_temp = convert_wrf_temperature(wrf_info.Filename);
+            end
+            
             if pres_precomputed % P and PB are already combined into the 'pres' variable in the monthly files
                 varname = 'pres';
                 p_tmp = ncread(wrf_info.Filename, varname);
