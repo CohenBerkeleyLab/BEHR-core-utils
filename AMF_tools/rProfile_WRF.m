@@ -258,12 +258,21 @@ end
         utc_hr = round(hour(omi_utc_mean));
         if strcmpi(profile_mode, 'daily')
             file_name = sprintf('wrfout_*_%04d-%02d-%02d_%02d-00-00', year_in, month_in, day_in, utc_hr);
+            % Allow for the possibility that the filenames are "unsanitized" and have colons in them still
+            file_name2 = sprintf('wrfout_*_%04d-%02d-%02d_%02d:00:00', year_in, month_in, day_in, utc_hr);
         elseif strcmpi(profile_mode, 'monthly')
             file_name = sprintf('WRF_BEHR_monthly_%02d.nc', month_in);
         end
         
         F = dir(fullfile(wrf_output_path,file_name));
-        if numel(F) < 1
+        if numel(F) < 1 && strcmpi(profile_mode, 'daily')
+            % For daily profiles, try the unsanitized name (with colons) 
+            % if we haven't found a file
+            F = dir(fullfile(wrf_output_path, file_name2));
+        end
+
+        % Ensure we found exactly 1 file
+        if numel(F) < 1 
             E.filenotfound(file_name);
         elseif numel(F) > 1
             E.toomanyfiles(file_name);
