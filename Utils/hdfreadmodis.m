@@ -15,12 +15,21 @@ function [ data, fill_value, scale_factor, offset ] = hdfreadmodis( filename, ds
 %
 %   must be met for VAL to be considered a fill value. Defaults to 0.001.
 %
-%   [ DATASET, FILL_VALUE, SCALE_FACTOR, OFFSET ] = H5READOMI( __ ) returns
-%   the other attributes as well as the dataset.
+%   DATA = HDFREADMODIS( ___, 'log_index', {xx1, xx2, ...} ) uses the
+%   logical vectors xx1, xx2, etc. to generate START, STRIDE, EDGE arrays
+%   to subset the SDS during reading. xx1, xx2, etc. should be logical
+%   arrays that are TRUE for indicies in the corresponding dimension of the
+%   dataset that you want to include. Note: this assumes that the region to
+%   read in is contiguous. If not, a warning is issued.
+%
+%   [ DATASET, FILL_VALUE, SCALE_FACTOR, OFFSET ] = HDFREADMODIS( __ )
+%   returns the other attributes as well as the dataset.
+
 
 E = JLLErrors;
 p = inputParser;
 p.addParameter('fill_crit',0.001);
+p.addParameter('log_index', {});
 p.parse(varargin{:});
 pout = p.Results;
 
@@ -28,8 +37,17 @@ fill_crit = pout.fill_crit;
 if ~isnumeric(fill_crit) || ~isscalar(fill_crit) || fill_crit <= 0
     E.badinput('FILL_CRIT must be a positive, scalar number')
 end
+log_index = pout.log_index;
+if ~iscell(log_index) || any(~iscellcontents(log_index, 'isvector')) || any(~iscellcontents(log_index, 'islogical'))
+    E.badinput('LOG_CRIT must be a cell array of logical vectors')
+end
 
-data = double(hdfread(filename, dsetname));
+if isempty(log_index)
+    data = double(hdfread(filename, dsetname));
+else
+    index_cell = make_index_cell(log_index);
+    data = double(hdfread(filename, dsetname, 'index', index_cell));
+end
 fill_value = double(hdfreadatt(filename, dsetname, '_FillValue'));
 try
     scale_factor = double(hdfreadatt(filename, dsetname, 'scale_factor'));
@@ -64,3 +82,18 @@ data = (data - offset) * scale_factor;
 
 end
 
+function c = make_index_cell(log_index)
+c = cell(1,3);
+c([1,3]) = {zeros(1,numel(log_index))};
+c(2) = {ones(1,numel(log_index))};
+
+for a=1:numel(log_index)
+    s = find(log_index{a}, 1, 'first');
+    e = find(log_index{a}, 1, 'last')-s+1;
+    if ~all(log_index{a}(s:e))
+        warning('Subset of dimension %d is not contiguous, all elements between the first and last true value will be used', a)
+    end
+    c{1}(a) = s; % do not need to switch to 0 based indexing
+    c{3}(a) = e;
+end
+end
