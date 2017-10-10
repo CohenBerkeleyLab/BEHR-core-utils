@@ -94,7 +94,7 @@ flags_meaning{2} = '2: Critical error bit: set if VCD from pixel should not be u
 %%%%%%%%%%%%%%%
 
 % Set an error flag if the AMF has been set to the minimum value
-set_flags(data.BEHRAMFTrop <= behr_min_amf_val() | data.BEHRAMFTropVisOnly <= behr_min_amf_val(), 3, true, true,...
+set_flags(data.BEHRAMFTrop <= 1e-6 | data.BEHRAMFTropVisOnly <= 1e-6, 3, true, true,...
     'BEHR AMF error: AMF below minimum value');
 
 % Set an error flag if the VcdQualityFlags field is not an even value (it's
