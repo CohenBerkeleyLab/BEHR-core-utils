@@ -1,4 +1,4 @@
-function [ behr_flags, flags_meaning ] = behr_quality_flags( behr_amfs, behr_vis_amfs, vcd_flags, xtrack_flags, modis_ocean_flag, modis_brdf_quality, cloud_frac )
+function [ behr_flags, flags_meaning ] = behr_quality_flags( data )
 %BEHR_QUALITY_FLAGS Create the BEHRQualityFlags field
 %   In order to simplify things for the end user, I decided to combine the
 %   NASA quality flags with some of our own into a single flag field. Like
@@ -18,52 +18,73 @@ function [ behr_flags, flags_meaning ] = behr_quality_flags( behr_amfs, behr_vis
 %   should not be used under ANY case for a to-ground or visible-only
 %   tropospheric VCD.
 %
-%   The third-sixteenth bits are to provide more information about the
-%   root cause of the error, each one should be set if a certain condition
-%   is met. If any of these are set, then the first bit (summary bit)
-%   should also be set.
+%   The third through sixteenth bits are to provide more information about
+%   the root cause of the error, each one should be set if a certain
+%   condition is met. If any of these are set, then the first bit (summary
+%   bit) should also be set.
 %
-%   The seventeenth-thirty second bits indicate warnings, these could be
-%   something that indicates that there MIGHT be a problem with the pixel,
-%   but that it is usually still useable, or just noting that a certain
-%   behavior occured in the retrieval for that pixel; for instance, I
-%   intend to use this to mark instances where the BRDF albedo used a water
-%   model, rather than the MODIS parameters.
+%   The seventeenth through thirty second bits indicate warnings, these
+%   could be something that indicates that there MIGHT be a problem with
+%   the pixel, but that it is usually still useable, or just noting that a
+%   certain behavior occured in the retrieval for that pixel; for instance,
+%   I intend to use this to mark instances where the BRDF albedo used a
+%   water model, rather than the MODIS parameters.
 %
 %   Usage:
 %
-%   BEHR_FLAGS = BEHR_QUALITY_FLAGS( BEHR_AMFS, BEHR_VIS_AMFS, VCD_FLAGS,
-%   XTRACK_FLAGS, MODIS_OCEAN_FLAGS )
+%   BEHR_FLAGS = BEHR_QUALITY_FLAGS( DATA ) where DATA is a scalar
+%   structure containing the native resolution BEHR data. This function
+%   requires it have the fields:
+%       * BEHRAMFTrop
+%       * BEHRAMFTropVisOnly
+%       * VcdQualityFlags
+%       * XTrackQualityFlags
+%       * AlbedoOceanFlag
+%       * MODISAlbedoQuality
+%       * MODISAlbedoFillFlag
+%       * CloudFraction
 %
-%       BEHR_FLAGS: the array of flags as unsigned 32 bit integers; an
-%       array the same size as BEHR_AMFS.
-%
-%       BEHR_AMFS: the array of BEHR total AMF values.
-%
-%       BEHR_VIS_AMFS: the array of BEHR visible-only AMF values.
-%
-%       VCD_FLAGS: the VcdQualityFlags read from NASA SP.
-%
-%       XTRACK_FLAGS: the XTrackQualityFlags read from NASA SP.
-%
-%       MODIS_OCEAN_FLAG: a logical array that is true where an ocean model
-%       was used instead of the MODIS kernels and coefficients.
+%   [ ___, FLAG_MEANING ] = BEHR_QUALITY_FLAGS( DATA )
+%   [  ~ , FLAG_MEANING ] = BEHR_QUALITY_FLAGS() The second output is a
+%   cell array giving the meaning of each flag bit. This is output either
+%   if DATA is given as an input or if no inputs are given. In the latter
+%   case, the value for the BEHR_FLAGS output should be discarded, since it
+%   is just a fill value since no data to base the flags on was given.
 
-% If given no arguments, we must just want the flag meanings, so create
-% filler arrays to allow the set_flags calls to work
-if nargin == 0
-    behr_amfs = 0;
-    behr_vis_amfs = 0;
-    vcd_flags = 0;
-    xtrack_flags = 0;
-    modis_ocean_flag = false;
-    modis_brdf_quality = false;
-    cloud_frac = 0;
+E = JLLErrors;
+
+if ~isstruct(data) || ~isscalar(data)
+    E.badinput('DATA must be a scalar structure');
+end
+
+% Add any fields used to set the flags here. They will be checked that they
+% are in data, or used to set default values if the user just needs the
+% flag meaning.
+req_fields = {'BEHRAMFTrop', 'BEHRAMFTropVisOnly', 'VcdQualityFlags', 'XTrackQualityFlags',...
+    'AlbedoOceanFlag', 'MODISAlbedoQuality', 'MODISAlbedoFillFlag', 'CloudFraction'};
+
+if nargin == 0    
+    % If given no arguments, we must just want the flag meanings, so create
+    % filler arrays to allow the set_flags calls to work. Assign a logical
+    % type b/c some of the set_flags read the fields directly and expect
+    % that input to be a logical array.
+    for a=1:numel(req_fields)
+        data.(req_fields{a}) = false;
+    end
+else
+    xx = ~ismember(req_fields, fieldnames(data));
+    if any(xx)
+        E.badinput('DATA is missing the required field(s): %s', strjoin(req_fields(xx), ', '));
+    end
 end
 
 % Set up the output arrays and define the summary bits
 
-behr_flags = uint32(zeros(size(behr_amfs)));
+% these are shared with the nested function set_flags, so do not need to be
+% passed to or returned from that function. This is a rare case where it
+% makes sense to not pass the variable explicitly, because "set_flags"
+% clearly should modify the flags.
+behr_flags = uint32(zeros(size(data.BEHRAMFTrop)));
 flags_meaning = cell(1, 32);
 flags_meaning{1} = '1: Summary bit: set if pixel would produce poor quality to-ground VCD';
 flags_meaning{2} = '2: Critical error bit: set if VCD from pixel should not be used under any condition';
@@ -73,16 +94,16 @@ flags_meaning{2} = '2: Critical error bit: set if VCD from pixel should not be u
 %%%%%%%%%%%%%%%
 
 % Set an error flag if the AMF has been set to the minimum value
-set_flags(behr_amfs <= 1e-6 | behr_vis_amfs <= 1e-6, 3, true, true,...
+set_flags(data.BEHRAMFTrop <= 1e-6 | data.BEHRAMFTropVisOnly <= 1e-6, 3, true, true,...
     'BEHR AMF error: AMF below minimum value');
 
 % Set an error flag if the VcdQualityFlags field is not an even value (it's
 % own quality summary flag was set)
-set_flags(mod(vcd_flags, 2) ~= 0, 4, true, true, 'VcdQualityFlags: NASA summary flag set');
+set_flags(mod(data.VcdQualityFlags, 2) ~= 0, 4, true, true, 'VcdQualityFlags: NASA summary flag set');
 
 % Set an error flag if the XTrackQualityFlags fields is ~= 0, i.e. it has
 % been affected by the row anomaly
-set_flags(xtrack_flags ~= 0, 5, true, true, 'XTrackQualityFlags: NASA flag > 0');
+set_flags(data.XTrackQualityFlags ~= 0, 5, true, true, 'XTrackQualityFlags: NASA flag > 0');
 
 
 %%%%%%%%%%%%%%%%%
@@ -91,17 +112,17 @@ set_flags(xtrack_flags ~= 0, 5, true, true, 'XTrackQualityFlags: NASA flag > 0')
 
 % Set a warning flag if the OMI cloud fraction is > 20%. This will also
 % indicate that the pixel should not be used for to-ground VCDs.
-set_flags(cloud_frac > 0.2, 17, true, false, 'OMI effective geometric cloud fraction >20%');
+set_flags(data.CloudFraction > 0.2, 17, true, false, 'OMI effective geometric cloud fraction >20%');
 
 % Set a warning flag if we have to use an ocean model for the BRDF
-set_flags(modis_ocean_flag, 18, false, false, 'Ocean Albedo Flag: surface albedo uses COART LUT');
+set_flags(data.AlbedoOceanFlag, 18, false, false, 'Ocean Albedo Flag: surface albedo uses COART LUT');
 
 % Set a warning if the BRDF quality is worse that 2.5. A quality of 2 is
 % "relative good quality, 75% or more with full inversions" while 3 is
 % "mixed, <= 75% full inversions and <= 25% fill values". Having the cut
 % off be 2.5 will all some poor quality MODIS BRDFs to contribute to the
 % surface reflectance without automatically flagging it as poor quality.
-set_flags(modis_brdf_quality >= 2.5, 19, false, false, 'MODIS BRDF quality worse than ( >= ) 2.5');
+set_flags(data.MODISAlbedoQuality >= 2.5 | data.MODISAlbedoFillFlag, 19, false, false, 'MODIS BRDF quality worse than ( >= ) 2.5 or > 50% of MODIS grid cells had fill value');
 
 
 
@@ -135,8 +156,6 @@ set_flags(modis_brdf_quality >= 2.5, 19, false, false, 'MODIS BRDF quality worse
         %   this is a check to make sure any future bits follow this
         %   convention.
 
-        
-        E = JLLErrors;
         % Type and size checking
         if ~isinteger(behr_flags)
             E.badinput('FLAGS must be an integer type')
