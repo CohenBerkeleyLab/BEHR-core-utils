@@ -6,12 +6,11 @@ if ~exist('cutdown', 'var')
     cutdown = 1;
 end
 
-hdfi = hdfinfo(behr_paths.modis_land_mask);
-lw_mask = hdfread(hdfi.Filename, hdfdsetname(hdfi, 1, 1, 'LW_MASK_UMD'));
-
 % The land mask seems to be given at 30 arc second resolution
 [lw_lon, lw_lat, lw_xx, lw_yy] = modis_cmg_latlon(1/120, lonlim, latlim, 'grid');
-lw_mask = lw_mask(lw_yy, lw_xx);
+
+hdfi = hdfinfo(behr_paths.modis_land_mask);
+lw_mask = hdfreadmodis(hdfi.Filename, hdfdsetname(hdfi, 1, 1, 'LW_MASK_UMD'), 'log_index', {lw_yy, lw_xx});
 
 % According to the attribute "LW_Label" on the LW_MASK_UMD dataset, of the
 % 7 labels, 0 = shallow ocean, 6 = moderate or continental ocean, and 7 =
