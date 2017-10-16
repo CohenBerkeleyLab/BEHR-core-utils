@@ -247,7 +247,7 @@ end
         temp_vec = nanmean(interp_temp,2);
     end
 
-    function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, file_name] = load_wrf_vars()
+    function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file] = load_wrf_vars()
         % Find the file for this day and the nearest hour May be "wrfout" or
         % "wrfout_subset"
         year_in = year(date_num_in);
@@ -360,6 +360,7 @@ end
             E.callError('unit_mismatch', 'Units for P and PB in %s do not match', wrf_info.Filename);
         end
         wrf_pres = convert_units(p_tmp + pb_tmp, p_units, 'hPa'); % convert from units in the wrfout files to hPa
+        wrf_file = wrf_info.Filename;
     end
 end
 
