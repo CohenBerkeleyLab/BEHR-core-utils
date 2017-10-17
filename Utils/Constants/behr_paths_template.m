@@ -149,6 +149,20 @@ classdef behr_paths_template
                 end
             end
         end
+        
+        function d = SPMatSubdir(region)
+            % BEHR_PATHS.SPMatSubdir( REGION ) returns the proper default
+            % path for OMI_SP files produced for the given REGION.
+            d = fullfile(behr_paths.sp_mat_dir, lower(region));
+        end
+        
+        function d = BEHRMatSubdir(region, prof_mode)
+            % BEHR_PATHS.BEHRMatSubdir( REGION, PROF_MODE ) returns the
+            % proper default path for OMI_BEHR files produced for the given
+            % REGION and PROF_MODE (profile mode, usually 'daily' or
+            % 'monthly'
+            d = fullfile(behr_paths.behr_mat_dir, lower(region), lower(prof_mode));
+        end
     end
     
     methods(Static = true, Access = private)

@@ -1,11 +1,44 @@
-function [ fname ] = behr_filename( date_in, ext, any_version )
+function [ fname ] = behr_filename( date_in, prof_mode, region, ext, behr_version )
 %BEHR_FILENAME Create the file name for a BEHR file of a given date
 %   FNAME = BEHR_FILENAME( DATE_IN ) Given the date, DATE_IN, as a date
 %   number or a string which datestr can parse without a specified format,
-%   will construct the proper BEHR .mat filename.
+%   will construct the proper BEHR .mat filename for the current BEHR
+%   version with wildcards ('*') for the region and profile type.
 %
-%   FNAME = BEHR_FILENAME( DATE_IN, EXT ) uses the extension EXT instead of
-%   .mat.
+%   FNAME = BEHR_FILENAME( DATE_IN, PROF_MODE ) will insert the string
+%   PROF_MODE in the file name in the proper place (in upper case) for
+%   files with that profile type (usually 'daily' or 'monthly'). The region
+%   remains a wildcard.
+%
+%   FNAME = BEHR_FILENAME( DATE_IN, PROF_MODE, REGION ) will insert the
+%   string REGION in the proper place (in upper case) for files retrieved
+%   over that region. 
+%
+%   FNAME = BEHR_FILENAME( DATE_IN, PROF_MODE, REGION, EXT ) uses the
+%   extension EXT instead of .mat. The leading . may be included or not. 
+%
+%   FNAME = BEHR_FILENAME( DATE_IN, PROF_MODE, REGION, EXT, BEHR_VERSION )
+%   will put the string BEHR_VERSION in place of the current version string
+%   in the filename.
+%
+%   FNAME = BEHR_FILENAME( DATE_IN, PROF_MODE, REGION, EXT, true ) is an
+%   old syntax to put a wildcard in for the version string. It is included
+%   for backwards compatibility.
+%
+%   The idea of putting wildcards in the file name is that it can be passed
+%   to DIR() in order to get a list of files that match for the given
+%   DATE_IN, which can help you write functions that work for any region,
+%   profile mode, or version.
+
+E = JLLErrors;
+
+if ~exist('prof_mode', 'var')
+    prof_mode = '*';
+end
+
+if ~exist('region', 'var')
+    region = '*';
+end
 
 if ~exist('ext','var')
     ext = 'mat';
@@ -14,19 +47,21 @@ else
     ext = regexprep(ext, '^\.', '');
 end
 
-if ~exist('any_version', 'var')
-    any_version = false;
-elseif (~islogical(any_version) && ~isnumeric(any_version)) || ~isscalar(any_version)
-    E.badinput('ANY_VERSION must be a scalar number or boolean (if given)')
+if ~exist('behr_version', 'var')
+    behr_version = false;
+elseif ~ischar(behr_version) && ((~islogical(behr_version) && ~isnumeric(behr_version)) || ~isscalar(behr_version))
+    E.badinput('BEHR_VERSION must be a string or a scalar number or boolean (if given)')
 end
 
-if any_version
+if ischar(behr_version)
+    ver_str = behr_version;
+elseif behr_version
     ver_str = '*';
 else
     ver_str = BEHR_version();
 end
 
-fname = sprintf('OMI_BEHR_%s_%s.%s', ver_str, datestr(date_in, 'yyyymmdd'), ext);
+fname = sprintf('OMI_BEHR-%s_%s_%s_%s.%s', upper(prof_mode), upper(region), ver_str, datestr(date_in, 'yyyymmdd'), ext);
 
 end
 

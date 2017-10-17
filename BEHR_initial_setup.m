@@ -36,15 +36,15 @@ build_omi_python();
         
         if exist(paths_file,'file')
             user_ans = input(sprintf('A %s file already exists in BEHR/Utils/Constants. Skip the paths setup and use existing?: ', paths_filename), 's');
-            if ~(strcmpi(user_ans,'Yes') || strcmpi(user_ans, 'y'))
-                return;
-            else
+            if ~(strcmpi(user_ans,'Yes') && ~strcmpi(user_ans, 'y'))
                 % Previously I had this function delete behr_path.m.
                 % However, since behr_paths is called later, that led to
                 % issue where Matlab wouldn't recompile the class or
                 % something, and try to use the old class. Having the user
                 % manually delete it avoids this problem.
                 error('behr_setup:file_exists', 'You must manually delete the existing behr_paths.m file at %s before this function will recreate that file', constants_path);
+            else
+                return;
             end
         elseif ~isempty(which(paths_filename))
             error('behr_setup:file_exists','%1$s exists on your Matlab search path, but at %2$s, not at %3$s. Please delete or move that version to %3$s.',paths_filename, which(paths_filename), constants_path);
@@ -107,10 +107,10 @@ build_omi_python();
         paths.python_interface.is_code_dir = true;
         
         % Matlab file folders
-        paths.sp_mat_dir.comment = sprintf('The default path where OMI_SP_vX-YZ_yyyymmdd.mat files will be saved and read from. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
-        paths.sp_mat_dir.default = fullfile(sat_folder, 'SAT', 'BEHR', 'SP_Files_2014');
-        paths.behr_mat_dir.comment = sprintf('The default path where OMI_BEHR_vX-YZ_yyyymmdd.mat files will be saved and read from. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
-        paths.behr_mat_dir.default = fullfile(sat_folder, 'SAT', 'BEHR', 'BEHR_Files_2014');
+        paths.sp_mat_dir.comment = sprintf('The default path where OMI_SP_*_yyyymmdd.mat files will be saved and read from. It should have subdirectories for each region to be produced (e.g. "us" - must be lower case). For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.sp_mat_dir.default = fullfile(sat_folder, 'SAT', 'BEHR', 'SP_Files');
+        paths.behr_mat_dir.comment = sprintf('The default root path where OMI_BEHR_*_yyyymmdd.mat files will be saved and read from. It should have subdirectories for each region to be produced and within each region directories "daily" and "monthly". For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.behr_mat_dir.default = fullfile(sat_folder, 'SAT', 'BEHR', 'BEHR_Files');
         
         % OMI and ancillary data folders
         paths.omno2_dir.comment = sprintf('This should contain folders organized by year and month with OMI-Aura_L2-OMNO2 files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
@@ -119,8 +119,8 @@ build_omi_python();
         paths.ompixcor_dir.default = fullfile(sat_folder, 'SAT', 'OMI', 'OMPIXCOR', 'version_003');
         paths.myd06_dir.comment = sprintf('This should contain folders for each year with MYD06_L2 files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
         paths.myd06_dir.default = fullfile(sat_folder, 'SAT', 'MODIS', 'MYD06_L2');
-        paths.mcd43c1_dir.comment = sprintf('This should contain folders for each year with MCD43C1 files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
-        paths.mcd43c1_dir.default = fullfile(sat_folder, 'SAT', 'MODIS', 'MCD43C1');
+        paths.mcd43d_dir.comment = sprintf('This should contain folders for each year with MCD43D* files in them. For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
+        paths.mcd43d_dir.default = fullfile(sat_folder, 'SAT', 'MODIS', 'MCD43D');
         paths.modis_land_mask.comment = sprintf('This is the "Land_Water_Mask_7Classes_UMD file, available from ftp://rsftp.eeos.umb.edu/data02/Gapfilled/ (as of 21 Sept 2017). For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
         paths.modis_land_mask.default = fullfile(sat_folder, 'SAT', 'MODIS', 'Land_Water_Mask_7Classes_UMD.hdf');
         paths.modis_land_mask.isfile = true;
