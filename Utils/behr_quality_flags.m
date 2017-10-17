@@ -53,9 +53,6 @@ function [ behr_flags, flags_meaning ] = behr_quality_flags( data )
 
 E = JLLErrors;
 
-if ~isstruct(data) || ~isscalar(data)
-    E.badinput('DATA must be a scalar structure');
-end
 
 % Add any fields used to set the flags here. They will be checked that they
 % are in data, or used to set default values if the user just needs the
@@ -72,6 +69,10 @@ if nargin == 0
         data.(req_fields{a}) = false;
     end
 else
+    if ~isstruct(data) || ~isscalar(data)
+        E.badinput('DATA must be a scalar structure');
+    end
+
     xx = ~ismember(req_fields, fieldnames(data));
     if any(xx)
         E.badinput('DATA is missing the required field(s): %s', strjoin(req_fields(xx), ', '));
