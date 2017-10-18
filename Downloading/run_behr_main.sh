@@ -23,35 +23,19 @@ DEBUG=1
 # as it is tested against offset back in time.
 stopoffset=-90
 
-if [[ -z $SPDIR ]]
+SPDIR="$(python get_behr_path.py sp_mat_dir)"
+BEHRDIR="$(python get_behr_path.py behr_mat_dir)"
+
+if [[ -z $MATRUNDIR ]]
 then
-    echo "ERROR run_behr_main.sh: env. var. SPDIR unset"
-    automessage.sh "ERROR run_behr_main.sh" "Env. variable SPDIR unset"
-    exit 1
-elif [[ -z $BEHRDIR ]]
-then
-    echo "ERROR run_behr_main.sh: env. var. BEHRDIR unset"
-    automessage.sh "ERROR run_behr_main.sh" "Env. variable BEHRDIR unset"
-    exit 1
-elif [[ -z $AMFTOOLSDIR ]]
-then
-    echo "ERROR run_behr_main.sh: env. var. AMFTOOLSDIR unset"
-    automessage.sh "ERROR run_behr_main.sh" "Env. variable AMFTOOLSDIR unset"
-    exit 1
-elif [[ -z $NO2PROFDIR ]]
-then
-    echo "ERROR run_behr_main.sh: env. var. NO2PROFDIR unset"
-    automessage.sh "ERROR run_behr_main.sh" "Env. variable NO2PROFDIR unset"
-    exit 1
-elif [[ -z $MATRUNDIR ]]
-then
-    echo "ERROR run_read_omno2.sh: env. var. MATRUNDIR unset"
-    automessage.sh "ERROR run_read_omno2" "Env. variable MATRUNDIR unset"
+    echo "ERROR run_behr_main.sh: env. var. MATRUNDIR unset"
+    automessage.sh "ERROR run_behr_main" "Env. variable MATRUNDIR unset"
     exit 1
 elif [[ $DEBUG -gt 0 ]]
 then
-    echo -e "SPDIR=${SPDIR}\nMODDIR=${MODDIR}\nMATRUNDIR=${MATRUNDIR}"
+    echo -e "SPDIR=${SPDIR}\nBEHRDIR=${BEHRDIR}\nMATRUNDIR=${MATRUNDIR}"
 fi
+
 
 # Check that the file server directories exist.
 if [[ ! -d $SPDIR ]]
@@ -64,12 +48,6 @@ if [[ ! -d $BEHRDIR ]]
 then
     echo "ERROR run_behr_main.sh: $BEHRDIR does not exist. Is the file server mounted?"
     automessage.sh "ERROR run_behr_main.sh" "$BEHRDIR does not exist. Is the file server mounted?"
-    exit 1
-fi
-if [[ ! -d $NO2PROFDIR ]]
-then
-    echo "ERROR run_behr_main.sh: $NO2PROFDIR does not exist. Is the file server mounted?"
-    automessage.sh "ERROR run_behr_main.sh" "$NO2PROFDIR does not exist. Is the file server mounted?"
     exit 1
 fi
 
@@ -141,22 +119,13 @@ done
 
 echo "Start: $startdate End: $enddate"
 
-# I'm cheating and using the fact that "onCluster" will cause the read_omno2 MATLAB function
-# to read the various directories from global variables, this way I don't have to worry
-# about them being changed when I pull the BEHR git repo.
-
-echo "warning('off', 'all'); global DEBUG_LEVEL; DEBUG_LEVEL=1;" >${MATRUNDIR}/runscript_behr.m 
-echo "addpath(genpath('${HOME}/Documents/MATLAB/BEHR'))" >> ${MATRUNDIR}/runscript_behr.m 
-echo "addpath(genpath('${HOME}/Documents/MATLAB/Classes'))" >> ${MATRUNDIR}/runscript_behr.m 
-echo "addpath(genpath('${HOME}/Documents/MATLAB/Utils'))" >> ${MATRUNDIR}/runscript_behr.m 
-echo "global onCluster; onCluster = true;" >> ${MATRUNDIR}/runscript_behr.m
-echo "global numThreads; numThreads = 1;" >> ${MATRUNDIR}/runscript_behr.m
-echo "global sp_mat_dir; sp_mat_dir = '$SPDIR'" >> ${MATRUNDIR}/runscript_behr.m
-echo "global behr_mat_dir; behr_mat_dir = '$BEHRDIR'" >> ${MATRUNDIR}/runscript_behr.m
-echo "global amf_tools_path; amf_tools_path = '$AMFTOOLSDIR'" >> ${MATRUNDIR}/runscript_behr.m
-echo "global no2_profile_path; no2_profile_path = '$NO2PROFDIR'" >> ${MATRUNDIR}/runscript_behr.m
-
-echo "BEHR_main('${startdate}', '${enddate}'); exit(0)" >> ${MATRUNDIR}/runscript_behr.m
+# With the new behr_paths class, it is much easier to set up over SSH connections, so
+# we will use the default paths in that class for inputs and outputs. We just need to 
+# run the add paths method at the beginning
+echo "addpath('${HOME}/Documents/MATLAB/BEHR/BEHR-core-utils/Utils/Constants');" >> ${MATRUNDIR}/runscript.m
+echo "behr_paths.AddCodePaths('nosave');" >> ${MATRUNDIR}/runscript.m
+echo "warning('off', 'all');" >${MATRUNDIR}/runscript_behr.m 
+echo "BEHR_main('${startdate}', '${enddate}', 'overwrite', false, 'DEBUG_LEVEL', 1); exit(0)" >> ${MATRUNDIR}/runscript_behr.m
 
 startmatlab -r "run('${MATRUNDIR}/runscript_behr.m')" > "${MATRUNDIR}/mat-behr.log"
 

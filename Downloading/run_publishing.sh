@@ -25,17 +25,10 @@ DEBUG=1
 # as it is tested against offset back in time.
 stopoffset=-90
 
-if [[ -z $BEHRDIR ]]
-then
-    echo "ERROR run_publishing.sh: env. var. BEHRDIR unset"
-    automessage.sh "ERROR run_publishing.sh" "Env. variable BEHRDIR unset"
-    exit 1
-elif [[ -z $HDFSAVEDIR ]]
-then
-    echo "ERROR run_publishing.sh: env. var. HDFSAVEDIR unset"
-    automessage.sh "ERROR run_publishing.sh" "Env. variable HDFSAVEDIR unset"
-    exit 1
-elif [[ -z $MATRUNDIR ]]
+BEHRDIR="$(python get_behr_path.py behr_mat_dir)"
+HDFSAVEDIR="$(python get_behr_path.py website_staging_dir)"
+
+if [[ -z $MATRUNDIR ]]
 then
     echo "ERROR run_publishing.sh: env. var. MATRUNDIR unset"
     automessage.sh "ERROR run_publishing.sh" "Env. variable MATRUNDIR unset"
@@ -150,29 +143,23 @@ done
 
 echo "Start: $startdate End: $enddate"
 
-# I'm cheating and using the fact that "onCluster" will cause the read_omno2 MATLAB function
-# to read the various directories from global variables, this way I don't have to worry
-# about them being changed when I pull the BEHR git repo.
 
+# With the new behr_paths class, it is much easier to set up over SSH connections, so
+# we will use the default paths in that class for inputs and outputs. We just need to 
+# run the add paths method at the beginning
+echo "addpath('${HOME}/Documents/MATLAB/BEHR/BEHR-core-utils/Utils/Constants');" >> ${MATRUNDIR}/runscript.m
+echo "behr_paths.AddCodePaths('nosave');" >> ${MATRUNDIR}/runscript.m
 echo "warning('off', 'all'); global DEBUG_LEVEL; DEBUG_LEVEL=1;" >${MATRUNDIR}/runscript_pub.m 
-echo "addpath(genpath('${HOME}/Documents/MATLAB/BEHR'))" >> ${MATRUNDIR}/runscript_pub.m 
-echo "addpath(genpath('${HOME}/Documents/MATLAB/Classes'))" >> ${MATRUNDIR}/runscript_pub.m 
-echo "addpath(genpath('${HOME}/Documents/MATLAB/Utils'))" >> ${MATRUNDIR}/runscript_pub.m 
-echo "global onCluster; onCluster = true;" >> ${MATRUNDIR}/runscript_pub.m
-echo "global numThreads; numThreads = 1;" >> ${MATRUNDIR}/runscript_pub.m
-echo "global mat_file_dir; mat_file_dir = '$BEHRDIR'" >> ${MATRUNDIR}/runscript_pub.m
+
 # Ensure that the website's record of the version number is up-to-date. Do this first so that if there isn't
 # any data to publish, it still gets updated.
 echo "update_behr_version_website;" >> ${MATRUNDIR}/runscript_pub.m
+
 # Native HDF files
-echo "global save_dir; save_dir = '${HDFSAVEDIR}/behr_hdf'" >> ${MATRUNDIR}/runscript_pub.m
-echo "BEHR_publishing_v2('hdf','native',{},'${startdate}', '${enddate}'); " >> ${MATRUNDIR}/runscript_pub.m
-# Native text files
-echo "global save_dir; save_dir = '${HDFSAVEDIR}/behr_txt'" >> ${MATRUNDIR}/runscript_pub.m
-echo "BEHR_publishing_v2('txt','native',{},'${startdate}', '${enddate}'); " >> ${MATRUNDIR}/runscript_pub.m
+echo "BEHR_publishing_v2('output_type', 'hdf', 'pixel_type', 'native', 'start','${startdate}', 'end', '${enddate}', 'savedir', '${HDFSAVEDIR}/behr_hdf', 'organize', false, 'overwrite', 0, 'DEBUG_LEVEL', 1); " >> ${MATRUNDIR}/runscript_pub.m
+
 # Gridded HDF files
-echo "global save_dir; save_dir = '${HDFSAVEDIR}/behr_regridded_hdf'" >> ${MATRUNDIR}/runscript_pub.m
-echo "BEHR_publishing_v2('hdf','gridded',{},'${startdate}', '${enddate}');" >> ${MATRUNDIR}/runscript_pub.m
+echo "BEHR_publishing_v2('output_type', 'hdf', 'pixel_type', 'gridded', 'start','${startdate}', 'end', '${enddate}', 'savedir', '${HDFSAVEDIR}/behr_hdf', 'organize', false, 'overwrite', 0, 'DEBUG_LEVEL', 1); " >> ${MATRUNDIR}/runscript_pub.m
 echo "exit(0)" >> ${MATRUNDIR}/runscript_pub.m
 
 startmatlab -r "run('${MATRUNDIR}/runscript_pub.m')" > "${MATRUNDIR}/mat-pub.log"
