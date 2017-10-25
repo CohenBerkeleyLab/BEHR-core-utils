@@ -36,15 +36,15 @@ build_omi_python();
         
         if exist(paths_file,'file')
             user_ans = input(sprintf('A %s file already exists in BEHR/Utils/Constants. Skip the paths setup and use existing?: ', paths_filename), 's');
-            if ~(strcmpi(user_ans,'Yes') && ~strcmpi(user_ans, 'y'))
+            if strcmpi(user_ans,'Yes') || strcmpi(user_ans, 'y')
                 % Previously I had this function delete behr_path.m.
                 % However, since behr_paths is called later, that led to
                 % issue where Matlab wouldn't recompile the class or
                 % something, and try to use the old class. Having the user
                 % manually delete it avoids this problem.
-                error('behr_setup:file_exists', 'You must manually delete the existing behr_paths.m file at %s before this function will recreate that file', constants_path);
+                return;                
             else
-                return;
+                error('behr_setup:file_exists', 'You must manually delete the existing behr_paths.m file at %s before this function will recreate that file', constants_path);
             end
         elseif ~isempty(which(paths_filename))
             error('behr_setup:file_exists','%1$s exists on your Matlab search path, but at %2$s, not at %3$s. Please delete or move that version to %3$s.',paths_filename, which(paths_filename), constants_path);

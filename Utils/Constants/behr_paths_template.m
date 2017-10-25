@@ -89,6 +89,20 @@ classdef behr_paths_template
         end
         
         function AddCodePaths(varargin)
+            % BEHR_PATHS.AddCodePaths() will add all directories listed
+            % internally as containing code to the Matlab search path. It
+            % will ask interactively if you want to add the directories to
+            % your Matlab path permanently.
+            %
+            % BEHR_PATHS.AddCodePaths('nosave')
+            % BEHR_PATHS.AddCodePaths('save') both of these syntaxes
+            % preempt the interactive question. 'nosave' indicates not to
+            % save the new Matlab search path, 'save' indicates to save the
+            % new Matlab search path.
+            %
+            % BEHR_PATHS.AddCodePaths( ___, 'quiet' ) suppresses printing
+            % each path added. This can be used with any of the previous
+            % syntaxes.
             be_quiet = ismember('quiet', varargin);
             ask_to_save = true;
             if ismember('nosave', varargin)
