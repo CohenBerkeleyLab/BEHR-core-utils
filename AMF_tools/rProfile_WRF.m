@@ -1,4 +1,4 @@
-function [ no2_bins, temp_bins, wrf_file ] = rProfile_WRF( date_in, profile_mode, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
+function [ no2_bins, temp_bins, wrf_file, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -122,7 +122,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file] = load_wrf_vars();
+[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, pres_mode, temp_mode] = load_wrf_vars();
 
 
 num_profs = numel(wrf_lon);
@@ -247,7 +247,7 @@ end
         temp_vec = nanmean(interp_temp,2);
     end
 
-    function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file] = load_wrf_vars()
+    function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, pressure_mode, temperature_mode] = load_wrf_vars()
         % Find the file for this day and the nearest hour May be "wrfout" or
         % "wrfout_subset"
         year_in = year(date_num_in);
@@ -326,8 +326,10 @@ end
                 if ~strcmp(temp_units, 'K')
                     E.notimplemented('WRF temperature not in Kelvin');
                 end
+                temperature_mode = 'precomputed';
             else
                 wrf_temp = convert_wrf_temperature(wrf_info.Filename);
+                temperature_mode = 'online';
             end
             
             if pres_precomputed % P and PB are already combined into the 'pres' variable in the monthly files
@@ -336,6 +338,7 @@ end
                 pb_tmp = 0; % Allows us to skip a second logical test later
                 p_units = ncreadatt(wrf_info.Filename, 'pres', 'units');
                 pb_units = p_units;
+                pressure_mode = 'precomputed';
             else
                 varname = 'P';
                 p_tmp = ncread(wrf_info.Filename, varname);
@@ -343,6 +346,7 @@ end
                 varname = 'PB';
                 pb_tmp = ncread(wrf_info.Filename, varname);
                 pb_units = ncreadatt(wrf_info.Filename, 'PB', 'units');
+                pressure_mode = 'online';
             end
             varname = 'XLONG';
             wrf_lon = ncread(wrf_info.Filename, varname);

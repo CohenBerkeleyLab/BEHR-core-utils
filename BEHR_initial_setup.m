@@ -105,6 +105,9 @@ build_omi_python();
         paths.python_interface.comment = 'The MatlabPythonInterface repository. May be cloned from https://github.com/CohenBerkeleyLab/MatlabPythonInterface';
         paths.python_interface.default = fullfile(behr_utils_repo_path, '..', 'MatlabPythonInterface');
         paths.python_interface.is_code_dir = true;
+        paths.wrf_utils.comment = 'The WRF_Utils repository which should contain the function convert_wrf_temperature.m May be cloned from https://github.com/CohenBerkeleyLab/WRF_Utils';
+        paths.wrf_utils.default = fullfile(behr_utils_repo_path, '..', 'WRF_Utils');
+        paths.wrf_utils.is_code_dir = true;
         
         % Matlab file folders
         paths.sp_mat_dir.comment = sprintf('The default path where OMI_SP_*_yyyymmdd.mat files will be saved and read from. It should have subdirectories for each region to be produced (e.g. "us" - must be lower case). For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
