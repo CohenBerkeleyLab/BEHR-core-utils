@@ -1,4 +1,4 @@
-function [ no2_bins, temp_bins, wrf_file, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
+function [ no2_bins, temp_bins, wrf_file, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -108,7 +108,7 @@ end
 % Get the WRF output path - this function will itself throw an error if the
 % profile mode is wrong or the path does not exist.
 if ~exist('wrf_output_path', 'var') || isempty(wrf_output_path)
-    wrf_output_path = find_wrf_path(profile_mode, date_in);
+    wrf_output_path = find_wrf_path(region, profile_mode, date_in);
 else
     if ~ischar(wrf_output_path)
         E.badinput('WRF_OUTPUT_PATH must be a string');
@@ -293,7 +293,10 @@ end
         end
         
         try
-            wrf_no2_units = ncreadatt(wrf_info.Filename, 'no2', 'units');
+            % In the files from Hugo for Hong Kong, the attributes have
+            % extra spaces at the end, so we need to get rid of those
+            % spaces.
+            wrf_no2_units = strtrim(ncreadatt(wrf_info.Filename, 'no2', 'units'));
         catch err
             % If we cannot find the attribute "units" in the file for some
             % reason
@@ -305,8 +308,10 @@ end
             end
         end
         
-        % Convert to be an unscaled mixing ratio (parts-per-part)
-        wrf_no2 = convert_units(wrf_no2, wrf_no2_units, 'ppp');
+        % Convert to be an unscaled mixing ratio (parts-per-part). Allow
+        % the units to be different capitalization (i.e. since CMAQ seems
+        % to output units of ppmV instead of ppm or ppmv).
+        wrf_no2 = convert_units(wrf_no2, wrf_no2_units, 'ppp', 'case', false);
         
         wrf_vars = {wrf_info.Variables.Name};
         pres_precomputed = ismember('pres', wrf_vars);
@@ -322,7 +327,7 @@ end
             % an absolute temperature
             if temp_precomputed
                 wrf_temp = ncread(wrf_info.Filename, 'TT');
-                temp_units = ncreadatt(wrf_info.Filename, 'TT', 'units');
+                temp_units = strtrim(ncreadatt(wrf_info.Filename, 'TT', 'units'));
                 if ~strcmp(temp_units, 'K')
                     E.notimplemented('WRF temperature not in Kelvin');
                 end
@@ -336,16 +341,16 @@ end
                 varname = 'pres';
                 p_tmp = ncread(wrf_info.Filename, varname);
                 pb_tmp = 0; % Allows us to skip a second logical test later
-                p_units = ncreadatt(wrf_info.Filename, 'pres', 'units');
+                p_units = strtrim(ncreadatt(wrf_info.Filename, 'pres', 'units'));
                 pb_units = p_units;
                 pressure_mode = 'precomputed';
             else
                 varname = 'P';
                 p_tmp = ncread(wrf_info.Filename, varname);
-                p_units = ncreadatt(wrf_info.Filename, 'P', 'units');
+                p_units = strtrim(ncreadatt(wrf_info.Filename, 'P', 'units'));
                 varname = 'PB';
                 pb_tmp = ncread(wrf_info.Filename, varname);
-                pb_units = ncreadatt(wrf_info.Filename, 'PB', 'units');
+                pb_units = strtrim(ncreadatt(wrf_info.Filename, 'PB', 'units'));
                 pressure_mode = 'online';
             end
             varname = 'XLONG';
