@@ -179,10 +179,12 @@ set_flags(data.MODISAlbedoQuality >= 2.5 | data.MODISAlbedoFillFlag, 19, false, 
         
         behr_flags = bitset(behr_flags, bit, bool_mask);
         if is_error
-            behr_flags = bitset(behr_flags, 2, bool_mask);
+            error_mask = bool_mask | bitand(behr_flags, 2);
+            behr_flags = bitset(behr_flags, 2, error_mask);
         end
         if is_error || bad_to_ground_quality
-            behr_flags = bitset(behr_flags, 1, bool_mask);
+            bad_qual_mask = bool_mask | bitand(behr_flags,1);
+            behr_flags = bitset(behr_flags, 1, bad_qual_mask);
         end
         flags_meaning{bit} = sprintf('%d: %s', bit, explanation_string);
     end

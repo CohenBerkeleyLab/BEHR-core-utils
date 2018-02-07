@@ -5,7 +5,9 @@ function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
 %   function will load all the .mat files in the directory given by
 %   FILEPATH and output a concatenated version of the data in the field or
 %   fields given by DATAFIELDS, which should be a string or cell array of
-%   strings.
+%   strings. The output will be each requested data field as a separate
+%   output, plus a cell array that gives the date, orbit, and pixel number
+%   of each value in the first data field.
 %
 %   CAT_SAT_DATA( DATA, DATAFIELDS ) will concatenate all swaths in the
 %   structure DATA for the fields specified in DATAFIELDS. If DATAFIELDS is
@@ -162,8 +164,8 @@ else
     F = 0;
 end
 
-% Prep output
-varargout = cell(1,numel(datafields));
+% Prep output - we'll always include the date and swath as the last output
+varargout = cell(1,numel(datafields)+1);
 
 % Loop over all files (within the date limits given). Load the data
 % variable, look for the datafields given, and add their data to the output
@@ -208,15 +210,29 @@ for a=1:numel(F)
         end
         
         for c=1:numel(Data)
+            this_field = Data(c).(datafields{b});
+            this_date_and_swath = format_date_swath_cell(Data(c), size(this_field));
             if newdim
-                n = ndims(Data(c).(datafields{b}));
-                varargout{b} = cat(n+1, varargout{b}, Data(c).(datafields{b}));
+                n = ndims(this_field);
+                varargout{b} = cat(n+1, varargout{b}, this_field);
+                if b == 1
+                    varargout{end} = cat(n+1, varargout{end}, this_date_and_swath);
+                end
             elseif vector_bool
-                varargout{b} = cat(1, varargout{b}, Data(c).(datafields{b})(:));
+                varargout{b} = cat(1, varargout{b}, this_field(:));
+                if b == 1
+                    varargout{end} = cat(1, varargout{end}, this_date_and_swath(:));
+                end
             elseif ~newdim && ismatrix(Data(c).(datafields{b}))
-                varargout{b} = cat(1, varargout{b}, Data(c).(datafields{b}));
+                varargout{b} = cat(1, varargout{b}, this_field);
+                if b == 1
+                    varargout{end} = cat(1, varargout{end}, this_date_and_swath);
+                end
             elseif ~newdim && ~ismatrix(Data(c).(datafields{b}))
-                varargout{b} = cat(2, varargout{b}, Data(c).(datafields{b}));
+                varargout{b} = cat(2, varargout{b}, this_field);
+                if b == 1
+                    varargout{end} = cat(2, varargout{end}, this_date_and_swath);
+                end
             else
                 E.notimplemented(sprintf('concat case: newdim = %d and ndims = %d',newdim,ndims(Data(c).(datafields{b}))));
             end
@@ -230,3 +246,20 @@ end
 
 end
 
+function ds_cell = format_date_swath_cell(data, sz)
+E = JLLErrors;
+if ~isscalar(data) || ~isstruct(data)
+    E.badinput('DATA must be a scalar structure');
+end
+
+date = data.Date;
+% Old files might have Swath as a matrix, and sometimes will incorrectly
+% have a 0 in there, this should ensure we get the correct swath number as
+% a scalar value
+swath = unique(data.Swath(data.Swath > 0));
+
+ds_cell = cell(sz);
+for a=1:numel(ds_cell)
+    ds_cell{a} = sprintf('%s_o%d_p%d',date,swath,a);
+end
+end

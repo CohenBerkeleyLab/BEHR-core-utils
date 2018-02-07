@@ -36,15 +36,15 @@ build_omi_python();
         
         if exist(paths_file,'file')
             user_ans = input(sprintf('A %s file already exists in BEHR/Utils/Constants. Skip the paths setup and use existing?: ', paths_filename), 's');
-            if ~(strcmpi(user_ans,'Yes') && ~strcmpi(user_ans, 'y'))
+            if strcmpi(user_ans,'Yes') || strcmpi(user_ans, 'y')
                 % Previously I had this function delete behr_path.m.
                 % However, since behr_paths is called later, that led to
                 % issue where Matlab wouldn't recompile the class or
                 % something, and try to use the old class. Having the user
                 % manually delete it avoids this problem.
-                error('behr_setup:file_exists', 'You must manually delete the existing behr_paths.m file at %s before this function will recreate that file', constants_path);
+                return;                
             else
-                return;
+                error('behr_setup:file_exists', 'You must manually delete the existing behr_paths.m file at %s before this function will recreate that file', constants_path);
             end
         elseif ~isempty(which(paths_filename))
             error('behr_setup:file_exists','%1$s exists on your Matlab search path, but at %2$s, not at %3$s. Please delete or move that version to %3$s.',paths_filename, which(paths_filename), constants_path);
@@ -105,6 +105,9 @@ build_omi_python();
         paths.python_interface.comment = 'The MatlabPythonInterface repository. May be cloned from https://github.com/CohenBerkeleyLab/MatlabPythonInterface';
         paths.python_interface.default = fullfile(behr_utils_repo_path, '..', 'MatlabPythonInterface');
         paths.python_interface.is_code_dir = true;
+        paths.wrf_utils.comment = 'The WRF_Utils repository which should contain the function convert_wrf_temperature.m May be cloned from https://github.com/CohenBerkeleyLab/WRF_Utils';
+        paths.wrf_utils.default = fullfile(behr_utils_repo_path, '..', 'WRF_Utils');
+        paths.wrf_utils.is_code_dir = true;
         
         % Matlab file folders
         paths.sp_mat_dir.comment = sprintf('The default path where OMI_SP_*_yyyymmdd.mat files will be saved and read from. It should have subdirectories for each region to be produced (e.g. "us" - must be lower case). For UC Berkeley users, is it on the file server at %s which should be mounted on your computer.',sat_file_server);
