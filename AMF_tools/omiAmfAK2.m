@@ -81,7 +81,7 @@
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 
 
-function [amf, amfVis, amfCld, amfClr, sc_weights, avgKernel, no2ProfileInterp, swPlev ] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile)
+function [amf, amfVis, amfCld, amfClr, sc_weights_clr, sc_weights_cld, avgKernel, no2ProfileInterp, swPlev ] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile)
 
 
 % Each profile is expected to be a column in the no2Profile matrix.  Check
@@ -241,6 +241,8 @@ amfVis(~isnan(amfVis)) = max(amfVis(~isnan(amfVis)), behr_min_amf_val());
 % algorithm
 avgKernel = nan(size(swPlev));
 sc_weights = nan(size(swPlev));
+sc_weights_clr = swClr;
+sc_weights_cld = swCld;
 
 for i=1:numel(pTerr)
    % JLL 19 May 2015 - pull out the i'th vector, this will allow us
@@ -265,7 +267,8 @@ for i=1:numel(pTerr)
    ii = swPlev_i > pCld(i) & ~isnan(swPlev_i);
    swCld_i(ii)=1e-30;
 
-   % Added 14-15 May 2015 to handle outputting scattering weights
+   % 17 Nov 2017 - switched to outputting separate clear and cloudy
+   % scattering weights
    sc_weights(:,i) = (cldRadFrac(i).*swCld_i + (1-cldRadFrac(i)).*swClr_i);
    
    avgKernel(:,i) = sc_weights(:,i) ./ amf(i); % JLL 19 May 2015 - changed to use the scattering weights we're already calculating.

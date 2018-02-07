@@ -61,7 +61,12 @@ else
     ver_str = BEHR_version();
 end
 
-fname = sprintf('OMI_BEHR-%s_%s_%s_%s.%s', upper(prof_mode), upper(region), ver_str, datestr(date_in, 'yyyymmdd'), ext);
+if ischar(date_in) && strcmp(date_in, '*');
+    date_string = date_in;
+else
+    date_string = datestr(date_in, 'yyyymmdd');
+end
+fname = sprintf('OMI_BEHR-%s_%s_%s_%s.%s', upper(prof_mode), upper(region), ver_str, date_string, ext);
 
 end
 
