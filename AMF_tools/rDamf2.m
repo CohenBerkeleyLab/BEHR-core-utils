@@ -24,13 +24,13 @@
 %..........................................................................
 
 %function [presSave, szaSave, vzaSave, phiSave, albedoSave, surfPresSave, dAmfSave, dAmf] = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres)
-function dAmf = rDamf2(fileDamf, pressure, sza, vza, phi, albedo, surfPres)
+function dAmf = rDamf2(fileDamf, presProfile, sza, vza, phi, albedo, surfPres)
 
 E=JLLErrors;
 
-if any(diff(pressure) > 0);
-    E.badinput('pressure must be a monotonically decreasing vector of pressures');
-end
+% if any(diff(pressure) > 0);
+%     E.badinput('pressure must be a monotonically decreasing vector of pressures');
+% end
 
 mat_test = [ismatrix(sza), ismatrix(vza), ismatrix(phi), ismatrix(albedo), ismatrix(surfPres)];
 mat_error = {'SZA', 'VZA', 'PHI', 'ALBEDO', 'SURFPRES'};
@@ -79,7 +79,13 @@ for i=1:nPresSave;
 end
 
 dAmfx=shiftdim(dAmf1,2);
-dAmf = exp(interp1(log(presSave), log(dAmfx), log(pressure),'linear','extrap'));
 
+num_pix = numel(surfPres);
+
+for p = 1:num_pix
+    dAmf(:,p) = exp(interp1(log(presSave), log(dAmfx(:,p)), log(presProfile(:,p)),'linear','extrap'));
+end
+
+dAmf = reshape(dAmf, size(dAmf,1),size(surfPres,1), size(surfPres,2));
 status = fclose(fid);
 end
