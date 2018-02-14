@@ -81,7 +81,7 @@
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 
 
-function [amf, amfVis, amfCld, amfClr, sc_weights_clr, sc_weights_cld, avgKernel, no2ProfileInterp, swPlev ] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, presProfile, dAmfClr, dAmfCld, temperature, no2Profile)
+function [amf, amfVis, amfCld, amfClr, sc_weights_clr, sc_weights_cld, avgKernel, no2ProfileInterp, swPlev ] = omiAmfAK2(pTerr, pTropo, pCld, cldFrac, cldRadFrac, presProfile, dAmfClr, dAmfCld, temperature, no2Profile)
 
 
 % Each profile is expected to be a column in the no2Profile matrix.  Check
@@ -131,7 +131,7 @@ for i=1:numel(pTerr)
         presProfile(:,i) = behr_pres_levels+0.1; %%%% symbol the pixels that have nan values
     end
     vcdGnd(i) = integPr2(no2Profile(:,i), presProfile(:,i), pTerr(i));  
-    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0;
+    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0 && pCld(i) > pTropo(i);
         vcdCld(i) = integPr2(no2Profile(:,i), presProfile(:,i), pCld(i));
     else
         vcdCld(i)=0;
@@ -141,7 +141,7 @@ for i=1:numel(pTerr)
     else
         amfClr(i)=0;
     end
-    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0;
+    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0 && pCld(i) > pTropo(i);
         cldSCD=integPr2((no2Profile(:,i).*dAmfCld(:,i).*alpha(:,i)), presProfile(:,i), pCld(i));
         amfCld(i) = cldSCD ./ vcdGnd(i);
     else
