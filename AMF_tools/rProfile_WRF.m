@@ -172,11 +172,10 @@ wrf_lat = reshape(wrf_lat, 1, num_profs);
 
 lons = squeeze(nanmean(loncorns,1));
 lats = squeeze(nanmean(latcorns,1));
-for p=1:num_pix
+for p=1:num_pix%%%%temp
     if ~inpolygon(lons(p), lats(p), wrf_lon_bnds, wrf_lat_bnds)
         continue
     end
-
     [pres_bins(:,p),no2_bins(:,p), temp_bins(:,p)] = avg_apriori();
     
 end
@@ -236,8 +235,8 @@ end
         
         % replace one pressure level by tropopause pressure
         pres_vec = pressures;
-        last_up_surf = find(pres_vec < wrf_tropopres(p),1,'first');
-        pres_vec(last_up_surf) = wrf_tropopres(p);
+        last_up_surf = find(pres_vec <= TropoPres(p),1,'first');
+        pres_vec(last_up_surf) = TropoPres(p);
         
         
         for a=1:size(tmp_no2,2)
