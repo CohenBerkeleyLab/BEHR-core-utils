@@ -311,7 +311,7 @@ end
         % Convert to be an unscaled mixing ratio (parts-per-part). Allow
         % the units to be different capitalization (i.e. since CMAQ seems
         % to output units of ppmV instead of ppm or ppmv).
-        wrf_no2 = convert_units(wrf_no2, wrf_no2_units, 'ppp', 'case', false);
+        wrf_no2 = convert_units(wrf_no2, wrf_no2_units, 'ppp');
         
         wrf_vars = {wrf_info.Variables.Name};
         pres_precomputed = ismember('pres', wrf_vars);
