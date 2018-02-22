@@ -1,5 +1,5 @@
 
-function [ no2_bins, temp_bins, wrf_file, TropoPres, pindx, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
+function [ no2_bins, temp_bins, wrf_file, TropoPres, tropopause_interp_flag , pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
 
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
@@ -124,7 +124,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file,wrf_tropopres, pres_mode, temp_mode,extreme_indx] = load_wrf_vars();
+[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file,wrf_tropopres, pres_mode, temp_mode,tropopause_interp_indx] = load_wrf_vars();
 
 num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
@@ -132,7 +132,7 @@ num_pix = numel(surfPres);
 no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
 temp_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
 TropoPres = nan(size(surfPres));
-pindx = zeros(size(surfPres));
+tropopause_interp_flag = false(size(surfPres));
 
 if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
     error('rProfile_WRF:wrf_dim','wrf_lon and wrf_lat should be 2D');
@@ -175,7 +175,7 @@ for p=1:num_pix
     if ~inpolygon(lons(p), lats(p), wrf_lon_bnds, wrf_lat_bnds)
         continue
     end
-    [no2_bins(:,p), temp_bins(:,p),TropoPres(p),pindx(p)] = avg_apriori();
+    [no2_bins(:,p), temp_bins(:,p),TropoPres(p),tropopause_interp_flag(p)] = avg_apriori();
     
 end
 
@@ -199,10 +199,10 @@ end
         tmp_lat = wrf_lat(xx);
         tmp_pTropo = wrf_tropopres(xx);
         
-        if any(xx(extreme_indx))
-            pindx = 1;
+        if any(xx(tropopause_interp_indx))
+            pindx = true;
         else
-            pindx = 0;
+            pindx = false;
         end
         
         yy = inpolygon(tmp_lon, tmp_lat, xall, yall);
@@ -265,7 +265,7 @@ end
         
     end
 
-   function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres,pressure_mode, temperature_mode,extreme_indx] = load_wrf_vars()
+   function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres,pressure_mode, temperature_mode,tropopause_interp_indx] = load_wrf_vars()
        % Find the file for this day and the nearest hour May be "wrfout" or
         % "wrfout_subset"
         year_in = year(date_num_in);
@@ -361,12 +361,7 @@ end
                 pb_tmp = 0; % Allows us to skip a second logical test later
                 p_units = strtrim(ncreadatt(wrf_info.Filename, 'pres', 'units'));
                 pb_units = p_units;
-
                 pressure_mode = 'precomputed';
-               % edited by qindan zhu, 02/07/2018.
-                % read tropopause pressure from wrf.
-                [~,wrf_tropopres] = find_wrf_tropopause( wrf_info );
-
             else
                 varname = 'P';
                 p_tmp = ncread(wrf_info.Filename, varname);
@@ -375,12 +370,12 @@ end
                 pb_tmp = ncread(wrf_info.Filename, varname);
                 pb_units = strtrim(ncreadatt(wrf_info.Filename, 'PB', 'units'));
                 pressure_mode = 'online';
-                [~,wrf_tropopres] = find_wrf_tropopause( wrf_info );
             end
             varname = 'XLONG';
             wrf_lon = ncread(wrf_info.Filename, varname);
             varname = 'XLAT';
             wrf_lat = ncread(wrf_info.Filename, varname);
+            [~,wrf_tropopres] = find_wrf_tropopause( wrf_info );
         catch err
             if strcmp(err.identifier,'MATLAB:imagesci:netcdf:unknownLocation')
                 E.callCustomError('ncvar_not_found',varname,F(1).name);
@@ -389,10 +384,10 @@ end
             end
         end
         % extrapolation wrf tropopause pressure when it's equal to 0
-        extreme_indx = find(wrf_tropopres == 0);
-        if any(extreme_indx) 
+        tropopause_interp_indx = (wrf_tropopres == 0);
+        if any(tropopause_interp_indx) 
             indx_nan = isnan(wrf_tropopres);
-            wrf_tropopres(extreme_indx) = nan;
+            wrf_tropopres(tropopause_interp_indx) = nan;
             wrf_tropopres = fillmissing(wrf_tropopres,'linear');
             wrf_tropopres(indx_nan) = nan;
         end
