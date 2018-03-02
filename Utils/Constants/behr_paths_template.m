@@ -150,6 +150,26 @@ classdef behr_paths_template
             end
         end
         
+        function SetPythonPath(varargin)
+            % BEHR_PATHS.SetPythonPath() modifies the Python search path
+            % used by Matlab to include all paths marked as including
+            % Python files.
+            be_quiet = ismember('quiet', varargin);
+            
+            fns = fieldnames(behr_paths);
+            for a=1:numel(fns)
+                if behr_paths.is_pypath.(fns{a})
+                    new_path = behr_paths.(fns{a});
+                    if count(py.sys.path, new_path) == 0
+                        if ~be_quiet
+                            fprintf('Adding %s\n', new_path);
+                        end
+                        insert(py.sys.path, int32(0), new_path);
+                    end
+                end
+            end
+        end
+        
         function ListAvailablePaths()
             % BEHR_PATHS.ListAvailablePaths() prints each path's property
             % name followed by the path it refers to.
