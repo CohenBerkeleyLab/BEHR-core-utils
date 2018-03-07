@@ -11,7 +11,9 @@ function [ fname ] = sp_savename( date_in, region, ext, behr_version )
 %
 %   FNAME = SP_SAVENAME( DATE_IN, REGION, EXT ) uses the extension EXT
 %   instead of .mat. EXT may include the leading . or not. You can pass a
-%   '*' for REGION to allow any region.
+%   '*' for REGION to allow any region. An empty string for region will
+%   omit the region part of the file name, as in the version 2 naming
+%   convention.
 %
 %   FNAME = SP_SAVENAME( DATE_IN, REGION, EXT, BEHR_VERSION ) will put the
 %   string BEHR_VERSION in the filename as the version string. You can pass
@@ -57,7 +59,11 @@ else
     ver_str = BEHR_version();
 end
 
-fname = sprintf('OMI_SP_%s_%s_%s.%s', upper(region), ver_str, datestr(date_in, 'yyyymmdd'), ext);
+if isempty(region)
+    fname = sprintf('OMI_SP_%s_%s.%s', ver_str, datestr(date_in, 'yyyymmdd'), ext);
+else
+    fname = sprintf('OMI_SP_%s_%s_%s.%s', upper(region), ver_str, datestr(date_in, 'yyyymmdd'), ext);
+end
 
 end
 

@@ -1,4 +1,4 @@
-function [ no2_bins, temp_bins, wrf_file, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
+function [ no2_bins, temp_bins, wrf_file, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, surfPres, pressures, varargin )
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -41,8 +41,8 @@ function [ no2_bins, temp_bins, wrf_file, pres_mode, temp_mode ] = rProfile_WRF(
 %       dimension has size 4 (i.e. loncorn(:,a) would give all 4 corners
 %       for pixel a).
 %
-%       omi_time: the starting time of the OMI swath in TAI93 (the time 
-%       format given in the OMNO2 files). Used to match up daily profiles 
+%       omi_time: the starting time of the OMI swath in TAI93 (the time
+%       format given in the OMNO2 files). Used to match up daily profiles
 %       to the OMI swath.
 %
 %       surfPres: a 1- or 2-D array containing the GLOBE surface pressures
@@ -58,10 +58,37 @@ function [ no2_bins, temp_bins, wrf_file, pres_mode, temp_mode ] = rProfile_WRF(
 %       string, the proper WRF directory will be found, just as if this
 %       input was omitted.
 %
+%
+%   Additional parameter inputs:
+%
+%       err_missing_att: controls whether an error is thrown if attributes
+%       in WRF files cannot be found (true, which is the default) or
+%       default values are assumed (false). Use with caution, as when set
+%       to "false" there will be no error checking of the units in WRF
+%       files.
+%
 %   Josh Laughner <joshlaugh5@gmail.com> 22 Jul 2015
 
-DEBUG_LEVEL = 1;
 E = JLLErrors;
+
+parser = inputParser;
+parser.addOptional('wrf_output_path', '', @ischar);
+parser.addParameter('err_missing_att', true);
+parser.addParameter('DEBUG_LEVEL', 1);
+
+parser.parse(varargin{:});
+pout = parser.Results;
+
+DEBUG_LEVEL = pout.DEBUG_LEVEL;
+error_if_missing_attr = pout.err_missing_att;
+wrf_output_path = pout.wrf_output_path;
+
+if ~isnumeric(DEBUG_LEVEL) || ~isscalar(DEBUG_LEVEL)
+    E.badinput('DEBUG_LEVEL must be a scalar number')
+end
+if ~islogical(error_if_missing_attr) || ~isscalar(error_if_missing_attr)
+    E.badinput('The parameter "err_missing_att" must be a scalar logical');
+end
 
 % Defining custom errors
 % Error for failing to find netCDF variable that is more descriptive about
@@ -107,7 +134,7 @@ end
 
 % Get the WRF output path - this function will itself throw an error if the
 % profile mode is wrong or the path does not exist.
-if ~exist('wrf_output_path', 'var') || isempty(wrf_output_path)
+if isempty(wrf_output_path)
     wrf_output_path = find_wrf_path(region, profile_mode, date_in);
 else
     if ~ischar(wrf_output_path)
@@ -137,13 +164,13 @@ if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
 end
 wrf_lon_bnds = [wrf_lon(1,1), wrf_lon(1,end), wrf_lon(end,end), wrf_lon(end,1)];
 wrf_lat_bnds = [wrf_lat(1,1), wrf_lat(1,end), wrf_lat(end,end), wrf_lat(end,1)];
-    
+
 
 % If the WRF profiles are spaced at intervals larger than the smallest dimension
 % of OMI pixels, interpolate instead of averaging b/c we will likely have at least
 % some pixels with no profiles within them.
 
-    
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% BIN PROFILES TO PIXELS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -173,7 +200,7 @@ for p=1:num_pix
     if ~inpolygon(lons(p), lats(p), wrf_lon_bnds, wrf_lat_bnds)
         continue
     end
-
+    
     [no2_bins(:,p), temp_bins(:,p)] = avg_apriori();
     
 end
@@ -266,20 +293,20 @@ end
         
         F = dir(fullfile(wrf_output_path,file_name));
         if numel(F) < 1 && strcmpi(profile_mode, 'daily')
-            % For daily profiles, try the unsanitized name (with colons) 
+            % For daily profiles, try the unsanitized name (with colons)
             % if we haven't found a file
             F = dir(fullfile(wrf_output_path, file_name2));
         end
-
+        
         % Ensure we found exactly 1 file
-        if numel(F) < 1 
+        if numel(F) < 1
             E.filenotfound(file_name);
         elseif numel(F) > 1
             E.toomanyfiles(file_name);
         else
             wrf_info = ncinfo(fullfile(wrf_output_path,F(1).name));
         end
-
+        
         % Load NO2 and check what unit it is - we'll use that to convert to
         % parts-per-part later. Make the location of units as general as possible
         try
@@ -292,21 +319,7 @@ end
             end
         end
         
-        try
-            % In the files from Hugo for Hong Kong, the attributes have
-            % extra spaces at the end, so we need to get rid of those
-            % spaces.
-            wrf_no2_units = strtrim(ncreadatt(wrf_info.Filename, 'no2', 'units'));
-        catch err
-            % If we cannot find the attribute "units" in the file for some
-            % reason
-            if strcmp(err.identifier, 'MATLAB:imagesci:netcdf:libraryFailure')
-                if DEBUG_LEVEL > 1; fprintf('\tWRF NO2 unit not identified. Assuming ppm\n'); end
-                wrf_no2_units = 'ppm';
-            else
-                rethrow(err);
-            end
-        end
+        wrf_no2_units = ncreadatt_default(wrf_info.Filename, 'no2', 'units', 'ppm', 'fatal_if_missing', error_if_missing_attr);
         
         % Convert to be an unscaled mixing ratio (parts-per-part). Allow
         % the units to be different capitalization (i.e. since CMAQ seems
@@ -327,13 +340,13 @@ end
             % an absolute temperature
             if temp_precomputed
                 wrf_temp = ncread(wrf_info.Filename, 'TT');
-                temp_units = strtrim(ncreadatt(wrf_info.Filename, 'TT', 'units'));
+                temp_units = ncreadatt_default(wrf_info.Filename, 'TT', 'units', 'K', 'fatal_if_missing', error_if_missing_attr);
                 if ~strcmp(temp_units, 'K')
                     E.notimplemented('WRF temperature not in Kelvin');
                 end
                 temperature_mode = 'precomputed';
             else
-                wrf_temp = convert_wrf_temperature(wrf_info.Filename);
+                wrf_temp = convert_wrf_temperature(wrf_info.Filename, 'err_if_missing_units', error_if_missing_attr);
                 temperature_mode = 'online';
             end
             
@@ -341,16 +354,16 @@ end
                 varname = 'pres';
                 p_tmp = ncread(wrf_info.Filename, varname);
                 pb_tmp = 0; % Allows us to skip a second logical test later
-                p_units = strtrim(ncreadatt(wrf_info.Filename, 'pres', 'units'));
+                p_units = ncreadatt_default(wrf_info.Filename, 'pres', 'units','Pa', 'fatal_if_missing', error_if_missing_attr);
                 pb_units = p_units;
                 pressure_mode = 'precomputed';
             else
                 varname = 'P';
                 p_tmp = ncread(wrf_info.Filename, varname);
-                p_units = strtrim(ncreadatt(wrf_info.Filename, 'P', 'units'));
+                p_units = ncreadatt_default(wrf_info.Filename, 'P', 'units', 'Pa', 'fatal_if_missing', error_if_missing_attr);
                 varname = 'PB';
                 pb_tmp = ncread(wrf_info.Filename, varname);
-                pb_units = strtrim(ncreadatt(wrf_info.Filename, 'PB', 'units'));
+                pb_units = ncreadatt_default(wrf_info.Filename, 'PB', 'units', 'Pa', 'fatal_if_missing', error_if_missing_attr);
                 pressure_mode = 'online';
             end
             varname = 'XLONG';

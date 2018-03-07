@@ -64,7 +64,9 @@ build_omi_python();
         % will make behr_paths aware that the directory given contains
         % code, and should be added to the Matlab path on request. If its
         % value is the string 'norecurse', only that directory (and not its
-        % subfolders) will be added to the path.
+        % subfolders) will be added to the path. Likewise, if "is_pypath"
+        % is a field, it will be aware that this path contains Python code
+        % and should be added to the Python path by SetPythonPath().
         
         sat_file_server = '128.32.208.13';
         wrf_file_server = 'cohenwrfnas.dyn.berkeley.edu';
@@ -102,6 +104,7 @@ build_omi_python();
         paths.psm_dir.comment = 'The PSM Gridding repository. It should contain the files PSM_Main.py and psm_wrapper.m. May be cloned from https://github.com/CohenBerkeleyLab/BEHR-PSM-Gridding';
         paths.psm_dir.default = fullfile(behr_utils_repo_path, '..', 'BEHR-PSM-Gridding');
         paths.psm_dir.is_code_dir = 'norecurse';
+        paths.psm_dir.is_pypath = true;
         paths.python_interface.comment = 'The MatlabPythonInterface repository. May be cloned from https://github.com/CohenBerkeleyLab/MatlabPythonInterface';
         paths.python_interface.default = fullfile(behr_utils_repo_path, '..', 'MatlabPythonInterface');
         paths.python_interface.is_code_dir = true;
@@ -287,10 +290,13 @@ end
 function write_iscodedir_structs(paths, fid)
 iscodedir_fxn = @(path_struct) isfield(path_struct, 'is_code_dir');
 do_genpath_fxn = @(path_struct) isfield(path_struct, 'is_code_dir') && ~strcmpi(path_struct.is_code_dir, 'norecurse');
+is_pypath_fxn = @(path_struct) isfield(path_struct, 'is_pypath');
 
 write_bool_structure(paths, fid, 'is_code_dir', iscodedir_fxn);
 fprintf(fid, '\n');
 write_bool_structure(paths, fid, 'do_genpath', do_genpath_fxn);
+fprintf(fid, '\n');
+write_bool_structure(paths, fid, 'is_pypath', is_pypath_fxn);
 end
 
 function write_bool_structure(paths, fid, struct_name, bool_fxn)
