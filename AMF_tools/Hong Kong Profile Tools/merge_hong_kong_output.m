@@ -1,7 +1,7 @@
 function [  ] = merge_hong_kong_output( root_dir, start_date, end_date, varargin )
 %MERGE_HONG_KONG_OUTPUT Merges CMAQ and WRF data into standard wrfout files
 %   MERGE_HONG_KONG_OUTPUT( ROOT_DIR, START_DATE, END_DATE ) Looks for
-%   folders dated 'dd mm yyyy' in ROOT_DIR and merges the hourly pressure,
+%   folders dated 'dd mmm yyyy' in ROOT_DIR and merges the hourly pressure,
 %   temperature, and NO2 files in those folders along with LON.nc and
 %   LAT.nc in ROOT_DIR into wrfout_cmaq files that follow the normal format
 %   for wrfout or wrfout_subset files read by rProfile_WRF. Only data
@@ -22,14 +22,16 @@ function [  ] = merge_hong_kong_output( root_dir, start_date, end_date, varargin
 
 E = JLLErrors;
 
-p = inputParser;
+p = advInputParser;
+p.addFlag('check_symlinks');
 p.addParameter('overwrite', false);
 p.addParameter('save_dir', '');
 p.addParameter('DEBUG_LEVEL', 2);
 
 p.parse(varargin{:});
-pout = p.Results;
+pout = p.AdvResults;
 
+check_symlinks_bool = pout.check_symlinks;
 overwrite = pout.overwrite;
 save_dir = pout.save_dir;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
@@ -130,9 +132,9 @@ hk_z_cut = [1:20, 21, 23, 25, 28, 32, 36];
 
 datevec = datenum(start_date):datenum(end_date);
 for d=1:numel(datevec)
-    subdir = datestr(datevec(d), 'dd mmmm yyyy');
+    subdir = datestr(datevec(d), 'dd mmm yyyy');
     this_save_dir = fullfile(save_dir, datestr(datevec(d), 'yyyy'), datestr(datevec(d), 'mm'));
-    if ~exist(this_save_dir, 'dir');
+    if ~exist(this_save_dir, 'dir')
         mkdir(this_save_dir)
     end
     for h=1:24
@@ -150,7 +152,7 @@ for d=1:numel(datevec)
         end
         
         % Copy the variable names and attributes
-        copy_schema(fullfile(root_dir, subdir), h, full_outfile);
+        copy_schema(fullfile(root_dir, subdir), h, full_outfile, check_symlinks_bool, datevec(d));
         
         % Copy the actual data, cutting down the WRF variables if
         % necessary.
@@ -159,12 +161,17 @@ for d=1:numel(datevec)
     end
 end
 
-    function copy_schema(input_dir, file_hour, output_file)
+    function copy_schema(input_dir, file_hour, output_file, check_links_bool, curr_date)
         fns = fieldnames(var_mapping);
         input_info = make_empty_struct_from_cell(fns);
         
         for f=1:numel(fns)
             input_file = make_input_name(input_dir, fns{f}, file_hour);
+            
+            if check_links_bool
+                check_symlink(input_file, curr_date);
+            end
+            
             input_info.(fns{f}) = ncinfo(input_file);
             input_info.(fns{f}).Variables.Name = var_mapping.(fns{f});
         end
@@ -221,20 +228,57 @@ end
     function schema = match_cmaq_wrf_schema_grids(schema)
         % First, we need to make sure only one dimension is unlimited.
         % We'll use the WRF Time dimension
-        wrf_time_dim = schema.P.Dimensions(4);
-        if ~strcmp(wrf_time_dim.Name, 'Time')
-            E.callError('time_dim', 'Wrong dimension index for Time used')
+        unlimited_ind = [schema.P.Dimensions.Name];
+        if sum(unlimited_ind) == 1
+            wrf_unlimited_dim = schema.P.Dimensions(unlimited_ind);
+        else
+            wrf_unlimited_dim = [];
+            warning('No unlimited dimension found!');
         end
         
+        % The way that "schema" is set up, is that each variable is
+        % represented by a schema for a single variable file. So, e.g.
+        % schema.P is as if ncinfo was called on a file that only had one
+        % variable, P. (That's why below we can reference
+        % schema.(fns{f}).Variables.Dimensions without a multiple-reference
+        % error). This whole block is dealing with different "Time"
+        % dimensions between WRF and CMAQ. Basically, since version 3
+        % netCDF files can only have one unlimited dimension, any unlimited
+        % dimension gets overwritten by the WRF "Time" dimension so that
+        % only one unlimited dimension is defined across all the schema.
+        %
+        % In the WRF files cut down to match CMAQ, the "Time" dimension is
+        % missing. In that case, we'll just remove the unlimited dimension
+        % entirely, since BEHR assumes that each file only contains one
+        % time anyway.
         fns = fieldnames(schema);
         for f=1:numel(fns)
             for i=1:numel(schema.(fns{f}).Dimensions)
                 if schema.(fns{f}).Dimensions(i).Unlimited
-                    schema.(fns{f}).Dimensions(i) = wrf_time_dim;
-                    if schema.(fns{f}).Variables.Dimensions(i).Unlimited
-                        schema.(fns{f}).Variables.Dimensions(i) = wrf_time_dim;
+                    % Found an unlimited dimension - overwrite it with the
+                    % WRF "Time" dimension, if that exists. 
+                    if ~isempty(wrf_unlimited_dim)
+                        schema.(fns{f}).Dimensions(i) = wrf_unlimited_dim;
+                        if schema.(fns{f}).Variables.Dimensions(i).Unlimited
+                            schema.(fns{f}).Variables.Dimensions(i) = wrf_unlimited_dim;
+                        else
+                            E.callError('time_dim', 'Unlimited dimension is different in the root and variable dimensions for %s', schema.(fns{f}).Filename);
+                        end
                     else
-                        E.callError('time_dim', 'Unlimited dimension is different in the root and variable dimensions for %s', schema.(fns{f}).Filename);
+                        % If WRF files do not have an unlimited dimension,
+                        % we need to remove the unlimited dimension from
+                        % the CMAQ file and variables.
+                        
+                        % Matlab seems to make a distinction between a
+                        % literal empty array and one saved to a variable,
+                        % so we have to explicitly use the empty brackets
+                        % to remove the dimension.
+                        schema.(fns{f}).Dimensions(i) = [];
+                        if schema.(fns{f}).Variables.Dimensions(i).Unlimited
+                            schema.(fns{f}).Variables.Dimensions(i) = [];
+                        else
+                            E.callError('time_dim', 'Unlimited dimension is different in the root and variable dimensions for %s', schema.(fns{f}).Filename);
+                        end
                     end
                 end
             end
@@ -242,10 +286,7 @@ end
             % Also make everything 64 bit
             schema.(fns{f}).Format = '64bit';
         end
-        
-        
-        
-        
+
         if all_sizes_equal(schema)
             return
         elseif isequal(size_from_schema(schema.NO2), hk_cmaq_sz) && isequal(size_from_schema(schema.LON), hk_cmaq_sz(1:2)) && isequal(size_from_schema(schema.LAT), hk_cmaq_sz(1:2)) && isequal(size_from_schema(schema.P), hk_wrf_sz) && isequal(size_from_schema(schema.PB), hk_wrf_sz) && isequal(size_from_schema(schema.T), hk_wrf_sz)
@@ -278,11 +319,11 @@ fns = fieldnames(data_in);
 % through to the end, all fields' sizes must have matched, so return true.
 for f=1:numel(fns)
     if ismember(fns{f}, {'LON','LAT'})
-        if ~isequal(size(data_in.(fns{f})), sz(1:2))
+        if ~isequal(sz_fxn(data_in.(fns{f})), sz(1:2))
             return
         end
     else
-        if ~isequal(size(data_in.(fns{f})), sz)
+        if ~isequal(sz_fxn(data_in.(fns{f})), sz)
             return
         end
     end
@@ -318,4 +359,28 @@ for i=1:numel(schema.Dimensions)
     schema.Dimensions(i).Length = sz_i;
     schema.Variables.Dimensions(i).Length = sz_i;
 end
+end
+
+function check_symlink(link_file, path_date)
+% Check that a symlink is pointing to a file for the current date. This
+% assumes that the file pointed to by the link resides in a folder named as
+% the date; i.e. the next to last path component is a folder with that
+% date. 
+
+E = JLLErrors;
+
+[stat, link_path] = system(sprintf('readlink "%s"', link_file));
+if stat ~= 0
+    return
+end
+
+tmp_path = strsplit(link_path, '/');
+date_folder = tmp_path{end-1};
+
+if datenum(date_folder, 'dd mmm yyyy') ~= datenum(path_date)
+    E.callError('check_symlink:wrong_date', 'File (%s) linked to wrong date (%s instead of %s)', link_file, date_folder, datestr(path_date, 'dd mmm yyyy'));
+else
+    fprintf('Link %s correct\n', link_file);
+end
+
 end
