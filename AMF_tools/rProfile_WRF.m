@@ -1,4 +1,6 @@
-function [ no2_bins, temp_bins, wrf_file, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
+
+function [ no2_bins, temp_bins, wrf_file, TropoPres, tropopause_interp_flag , pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
+
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
 %   the same purpose - read in WRF-Chem NO2 profiles to use as the a priori
@@ -122,15 +124,15 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, pres_mode, temp_mode] = load_wrf_vars();
-
+[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file,wrf_tropopres, pres_mode, temp_mode,tropopause_interp_indx] = load_wrf_vars();
 
 num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
-
 num_pix = numel(surfPres);
 no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
 temp_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
+TropoPres = nan(size(surfPres));
+tropopause_interp_flag = false(size(surfPres));
 
 if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
     error('rProfile_WRF:wrf_dim','wrf_lon and wrf_lat should be 2D');
@@ -165,7 +167,7 @@ wrf_temp = reshape(wrf_temp, prof_length, num_profs);
 wrf_pres = reshape(wrf_pres, prof_length, num_profs);
 wrf_lon = reshape(wrf_lon, 1, num_profs);
 wrf_lat = reshape(wrf_lat, 1, num_profs);
-
+wrf_tropopres = reshape(wrf_tropopres, 1, num_profs);
 
 lons = squeeze(nanmean(loncorns,1));
 lats = squeeze(nanmean(latcorns,1));
@@ -173,12 +175,12 @@ for p=1:num_pix
     if ~inpolygon(lons(p), lats(p), wrf_lon_bnds, wrf_lat_bnds)
         continue
     end
-
-    [no2_bins(:,p), temp_bins(:,p)] = avg_apriori();
+    [no2_bins(:,p), temp_bins(:,p),TropoPres(p),tropopause_interp_flag(p)] = avg_apriori();
     
 end
 
-    function [no2_vec, temp_vec] = avg_apriori()
+
+    function [no2_vec, temp_vec, pTropo, pindx] = avg_apriori()
         xall = loncorns(:,p);
         xall(5) = xall(1);
         
@@ -195,6 +197,13 @@ end
         tmp_pres = wrf_pres(:,xx);
         tmp_lon = wrf_lon(xx);
         tmp_lat = wrf_lat(xx);
+        tmp_pTropo = wrf_tropopres(xx);
+        
+        if any(xx(tropopause_interp_indx))
+            pindx = true;
+        else
+            pindx = false;
+        end
         
         yy = inpolygon(tmp_lon, tmp_lat, xall, yall);
         
@@ -202,12 +211,15 @@ end
             %E.callError('no_prof','WRF Profile not found for pixel near %.1, %.1f',mean(xall),mean(yall));
             no2_vec = nan(length(pressures),1);
             temp_vec = nan(length(pressures),1);
+            pTropo = nan;
             return
         end
         
         tmp_no2(:,~yy) = [];
         tmp_temp(:,~yy) = [];
         tmp_pres(:,~yy) = [];
+        tmp_pTropo(~yy) = [];
+        
         
         % Interpolate all the NO2 and temperature profiles to the input
         % pressures, then average them. Extrapolate so that later we can be
@@ -224,7 +236,7 @@ end
         %   z \propto ln(p)
         %
         % therefore, T should be proportional to ln(p)
-        
+
         interp_no2 = nan(length(pressures), size(tmp_no2,2));
         interp_temp = nan(length(pressures), size(tmp_temp,2));
         
@@ -243,12 +255,18 @@ end
         interp_no2(1:last_below_surf,:) = nan;
         interp_temp(1:last_below_surf,:) = nan;
         
+        pTropo = nanmean(tmp_pTropo);
+        last_up_tropo = find(pressures < pTropo,1,'first')+1;
+        interp_no2(last_up_tropo:end,:) = nan;
+        interp_temp(last_up_tropo:end,:) = nan;
+        
         no2_vec = nanmean(interp_no2,2);
         temp_vec = nanmean(interp_temp,2);
+        
     end
 
-    function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, pressure_mode, temperature_mode] = load_wrf_vars()
-        % Find the file for this day and the nearest hour May be "wrfout" or
+   function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres,pressure_mode, temperature_mode,tropopause_interp_indx] = load_wrf_vars()
+       % Find the file for this day and the nearest hour May be "wrfout" or
         % "wrfout_subset"
         year_in = year(date_num_in);
         month_in = month(date_num_in);
@@ -357,6 +375,7 @@ end
             wrf_lon = ncread(wrf_info.Filename, varname);
             varname = 'XLAT';
             wrf_lat = ncread(wrf_info.Filename, varname);
+            [~,wrf_tropopres] = find_wrf_tropopause( wrf_info );
         catch err
             if strcmp(err.identifier,'MATLAB:imagesci:netcdf:unknownLocation')
                 E.callCustomError('ncvar_not_found',varname,F(1).name);
@@ -364,7 +383,15 @@ end
                 rethrow(err);
             end
         end
-        
+        % extrapolation wrf tropopause pressure when it's equal to 0
+        tropopause_interp_indx = (wrf_tropopres == 0);
+        if any(tropopause_interp_indx) 
+            indx_nan = isnan(wrf_tropopres);
+            wrf_tropopres(tropopause_interp_indx) = nan;
+            wrf_tropopres = fillmissing(wrf_tropopres,'linear');
+            wrf_tropopres(indx_nan) = nan;
+        end
+        %
         if ~strcmp(pb_units, p_units)
             E.callError('unit_mismatch', 'Units for P and PB in %s do not match', wrf_info.Filename);
         end
