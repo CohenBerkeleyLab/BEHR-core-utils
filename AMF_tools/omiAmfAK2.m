@@ -81,7 +81,7 @@
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 
 
-function [amf, amfVis, amfCld, amfClr, sc_weights_clr, sc_weights_cld, avgKernel, no2ProfileInterp, swPlev ] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile)
+function [amf, amfVis, amfCld, amfClr, sc_weights_clr, sc_weights_cld, avgKernel, no2ProfileInterp, swPlev ] = omiAmfAK2(pTerr, pTropo, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile)
 
 
 % Each profile is expected to be a column in the no2Profile matrix.  Check
@@ -118,7 +118,7 @@ amfCld=zeros(size(pTerr));
 % vector). We add two to the first dimension of these matrices to make room
 % for the two interpolated pressures.
 padvec = zeros(1,ndims(no2Profile));
-padvec(1) = 2;
+padvec(1) = 3;
 swPlev=zeros(size(no2Profile)+padvec);
 swClr=zeros(size(no2Profile)+padvec);
 swCld=zeros(size(no2Profile)+padvec);
@@ -127,19 +127,19 @@ nP = size(swPlev,1);
 
 
 for i=1:numel(pTerr)
-    vcdGnd(i) = integPr2(no2Profile(:,i), pressure, pTerr(i));  
-    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0;
-        vcdCld(i) = integPr2(no2Profile(:,i), pressure, pCld(i));
+    vcdGnd(i) = integPr2(no2Profile(:,i), pressure, pTerr(i),pTropo(i));  
+    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0 && pCld(i)>pTropo(i);
+        vcdCld(i) = integPr2(no2Profile(:,i), pressure, pCld(i),pTropo(i));
     else
         vcdCld(i)=0;
     end
     if cldFrac(i) ~= 1 && cldRadFrac(i) ~= 1;
-        amfClr(i) = integPr2((no2Profile(:,i).*dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i)) ./ vcdGnd(i);
+        amfClr(i) = integPr2((no2Profile(:,i).*dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i),pTropo(i)) ./ vcdGnd(i);
     else
         amfClr(i)=0;
     end
-    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0;
-        cldSCD=integPr2((no2Profile(:,i).*dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i));
+    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0 && pCld(i)>pTropo(i);
+        cldSCD=integPr2((no2Profile(:,i).*dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i),pTropo(i));
         amfCld(i) = cldSCD ./ vcdGnd(i);
     else
         amfCld(i)=0;
@@ -150,9 +150,9 @@ for i=1:numel(pTerr)
     % Added these lines to interpolate to the terrain & cloud pressures and
     % output a vector - this results in better agreement between our AMF and
     % the AMF calculated from "published" scattering weights.
-    [~, ~, this_no2ProfileInterp] = integPr2(no2Profile(:,i), pressure, pTerr(i), [pTerr(i), pCld(i)]);
-    [~,this_swPlev,this_swClr] = integPr2((dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i), [pTerr(i), pCld(i)]);
-    [~,~,this_swCld] = integPr2((dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i), [pTerr(i), pCld(i)]);
+    [~, ~, this_no2ProfileInterp] = integPr2(no2Profile(:,i), pressure, pTerr(i),pTropo(i), [pTerr(i), pCld(i),pTropo(i)]);
+    [~,this_swPlev,this_swClr] = integPr2((dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i),pTropo(i), [pTerr(i), pCld(i),pTropo(i)]);
+    [~,~,this_swCld] = integPr2((dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i),pTropo(i), [pTerr(i), pCld(i),pTropo(i)]);
     
     if ~iscolumn(this_swPlev)
         E.badvar('this_swPlev','Must be a column vector');

@@ -38,18 +38,26 @@
 %..........................................................................
 
 %function vcd = integPr(mixingRatio, pressure, pressureSurface, mixingRatioStd, vcdStd, corrLength) %mixingRatioStd, vcdStd, corrLength = 0 or 1
-function [vcd, p_out, f_out] = integPr2(mixingRatio, pressure, pressureSurface, interpPres)
+function [vcd, p_out, f_out] = integPr2(mixingRatio, pressure, pressureSurface, pressureTropopause, interpPres)
 
 E = JLLErrors;
 
 if nargin < 4;
+   pressureTropopause = min(pressure);
+end
+
+if ~isscalar(pressureTropopause)
+    E.badinput('PRESSURETROPOPAUSE must be a scalar')
+end
+
+if nargin < 5;
     interpPres = [];
     if nargout > 1
         E.callError('nargout','Without any interpPres values, p_out and f_out will not be set');
     end
 else
     % Make sure the interpolation pressure is not less than the 
-    interpPres = max(interpPres,min(pressure));
+        interpPres = max(interpPres,min(pressure));
 end
 
 if any(pressure<0)
@@ -100,6 +108,17 @@ f0 = interpolate_surface_pressure(p,f,p0);
 
 p(i0) = p0;
 f(i0) = f0;
+i_initial = i0;
+
+if ~isnan(pressureTropopause)
+    p_end   = max(pressureTropopause, min(pressure));
+    f_end = interpolate_surface_pressure(p,f,p_end);
+    p(i0+1) = p_end;
+    f(i0+1) = f_end;
+    i_end = i0;
+else 
+    i_end = n-1;
+end
 
 
 % Integrate................................................................
@@ -118,10 +137,10 @@ for i = 1:n-1;
     
 end
 
-if any(isnan(deltaVcd(i0:n-1))) && ~all(isnan(deltaVcd(i0:n-1)))
+if any(isnan(deltaVcd(i_initial:i_end))) && ~all(isnan(deltaVcd(i_initial:i_end)))
     warning('NaNs detected in partial columns. They will not be added into the total column density.')
 end
-vcd = nansum2(deltaVcd(i0:n-1));
+vcd = nansum2(deltaVcd(i_initial:i_end));
 
 
     function [f0] = interpolate_surface_pressure(p_in,f_in,p0_in)

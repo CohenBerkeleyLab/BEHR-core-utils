@@ -43,7 +43,8 @@ function [ behr_flags, flags_meaning ] = behr_quality_flags( data )
 %       * MODISAlbedoQuality
 %       * MODISAlbedoFillFlag
 %       * CloudFraction
-%
+%       * TropoPresVSCldPres
+%       * InterpolatedTropopausePressure
 %   [ ___, FLAG_MEANING ] = BEHR_QUALITY_FLAGS( DATA )
 %   [  ~ , FLAG_MEANING ] = BEHR_QUALITY_FLAGS() The second output is a
 %   cell array giving the meaning of each flag bit. This is output either
@@ -58,7 +59,7 @@ E = JLLErrors;
 % are in data, or used to set default values if the user just needs the
 % flag meaning.
 req_fields = {'BEHRAMFTrop', 'BEHRAMFTropVisOnly', 'VcdQualityFlags', 'XTrackQualityFlags',...
-    'AlbedoOceanFlag', 'MODISAlbedoQuality', 'MODISAlbedoFillFlag', 'CloudFraction'};
+    'AlbedoOceanFlag', 'MODISAlbedoQuality', 'MODISAlbedoFillFlag', 'CloudFraction', 'TropoPresVSCldPres','Interp_TropopausePressure'};
 
 if nargin == 0    
     % If given no arguments, we must just want the flag meanings, so create
@@ -126,7 +127,12 @@ set_flags(data.AlbedoOceanFlag, 18, false, false, 'Ocean Albedo Flag: surface al
 % surface reflectance without automatically flagging it as poor quality.
 set_flags(data.MODISAlbedoQuality >= 2.5 | data.MODISAlbedoFillFlag, 19, false, false, 'MODIS BRDF quality worse than ( >= ) 2.5 or > 50% of MODIS grid cells had fill value');
 
+% Set a warning if the cloud pressure is smaller than tropopause pressure
+set_flags(data.TropoPresVSCldPres, 19, false, false, 'Cloud pressure is smaller than tropopause pressure');
 
+% Set a warning if the wrf tropopause pressure is not calculated by lapse
+% rate but interpolated from neighboring points
+set_flags(data.Interp_TropopausePressure, 20, false, false, 'Tropopause Presssure is interpolated from neighboring points as no point with a lapse rate < 2 K/km is found');
 
     function set_flags(bool_mask, bit, bad_to_ground_quality, is_error, explanation_string)
         % This nested subfunction should always be used to set the flags.
