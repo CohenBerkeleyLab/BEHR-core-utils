@@ -125,7 +125,6 @@ end
 
 
 [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file,wrf_tropopres, pres_mode, temp_mode,tropopause_interp_indx] = load_wrf_vars();
-
 num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
 num_pix = numel(surfPres);
@@ -385,13 +384,22 @@ end
         end
         % extrapolation wrf tropopause pressure when it's equal to 0
         tropopause_interp_indx = (wrf_tropopres == 0);
-        if any(tropopause_interp_indx) 
+
+        if any(any(tropopause_interp_indx)) 
             indx_nan = isnan(wrf_tropopres);
             wrf_tropopres(tropopause_interp_indx) = nan;
-            wrf_tropopres = fillmissing(wrf_tropopres,'linear');
+            indx = ~isnan(wrf_tropopres);
+            wrf_lon_good = wrf_lon(indx);
+            wrf_lat_good = wrf_lat(indx);
+            wrf_tropo_good = wrf_tropopres(indx);
+            TropoScatObj = scatteredInterpolant(double(wrf_lon_good(:)),double(wrf_lat_good(:)),double(wrf_tropo_good(:)));
+            indx = isnan(wrf_tropopres);
+            wrf_lon_bad = wrf_lon(indx);
+            wrf_lat_bad = wrf_lat(indx);
+            wrf_tropopres(indx) = TropoScatObj(double(wrf_lon_bad(:)),double(wrf_lat_bad(:)));
             wrf_tropopres(indx_nan) = nan;
         end
-        %
+
         if ~strcmp(pb_units, p_units)
             E.callError('unit_mismatch', 'Units for P and PB in %s do not match', wrf_info.Filename);
         end
