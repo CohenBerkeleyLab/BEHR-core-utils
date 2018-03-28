@@ -397,7 +397,7 @@ end
         % extrapolation wrf tropopause pressure when it's equal to 0
         tropopause_interp_indx = (wrf_tropopres == 0);
 
-        if any(any(tropopause_interp_indx)) 
+        if any(tropopause_interp_indx(:)) 
             indx_nan = isnan(wrf_tropopres);
             wrf_tropopres(tropopause_interp_indx) = nan;
             indx = ~isnan(wrf_tropopres);

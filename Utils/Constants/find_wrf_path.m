@@ -1,4 +1,4 @@
-function [ wrf_path ] = find_wrf_path( region, profile_mode, this_date )
+function [ wrf_path ] = find_wrf_path( region, profile_mode, this_date, varargin )
 %FIND_WRF_PATH Returns the path to WRF profiles for the given date
 %   WRF_PATH = FIND_WRF_PATH( REGION, PROFILE_MODE, THIS_DATE ) Returns the
 %   proper path to the WRF-Chem profiles as WRF_PATH. Given PROFILE_MODE =
@@ -12,10 +12,21 @@ function [ wrf_path ] = find_wrf_path( region, profile_mode, this_date )
 
 E = JLLErrors;
 
-validate_date(this_date);
+p = advInputParser;
+p.addFlag('fullpath');
+
+p.parse(varargin{:});
+pout = p.AdvResults;
+
+find_exact_file = pout.fullpath;
+
+this_date = validate_date(this_date);
 
 if strcmpi(profile_mode, 'monthly')
     wrf_path = behr_paths.wrf_monthly_profiles;
+    if find_exact_file
+        wrf_path = fullfile(wrf_path, monthly_file_name(this_date));
+    end
     return
 elseif strcmpi(profile_mode, 'daily')
     yr_str = datestr(this_date, 'yyyy');
@@ -28,6 +39,10 @@ elseif strcmpi(profile_mode, 'daily')
         
         wrf_path = fullfile(wrf_dirs{a}, region, yr_str, mn_str);
         if exist(wrf_path, 'dir')
+            if find_exact_file
+                wrf_path = fullfile(wrf_path, daily_file_name(this_date));
+            end
+            
             return
         end
     end
@@ -40,3 +55,13 @@ end
 
 end
 
+function filename = monthly_file_name(this_date)
+filename = sprintf('WRF_BEHR_monthly_%s.nc', datestr(this_date, 'mm'));
+end
+
+function filename = daily_file_name(this_date)
+% Need to round this_date to the nearest hour
+time_component = mod(this_date,1)*24;
+this_date = floor(this_date) + round(time_component)/24;
+filename = sprintf('wrfout_d01_%s', datestr(this_date, 'yyyy-mm-dd_HH-00-00'));
+end
