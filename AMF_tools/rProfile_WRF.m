@@ -97,6 +97,18 @@ end
 % called: the variable name and the file name.
 E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %s. Likely this file was not processed with (slurm)run_wrf_output.sh, or the processing failed before writing the calculated quantites.');
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% CHECK DEPENDENCIES %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+G = GitChecker;
+% Require that WRF_Utils has the version of find_wrf_tropopause that has
+% been updated to identify jumps in the tropopause pressure and the general
+% utils have been updated to include the floodfill algorithm needed by 
+% find_wrf_tropopause.
+G.addReqCommits(behr_paths.wrf_utils, '9272d08');
+G.addReqCommits(behr_paths.utils, '51a0869');
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
