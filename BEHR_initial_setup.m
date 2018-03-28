@@ -73,17 +73,17 @@ build_omi_python();
         
         if ismac
             sat_folder = fullfile('/Volumes','share-sat');
-            wrf1_folder = fullfile('/Volumes', 'share-wrf1');
-            wrf2_folder = fullfile('/Volumes', 'share-wrf2');
+            wrf1_folder = fullfile('/Volumes', 'share-wrf1','BEHR-WRF');
+            wrf2_folder = fullfile('/Volumes', 'share-wrf2','BEHR-WRF');
         elseif isunix
             sat_folder = fullfile('/mnt','share-sat');
-            wrf1_folder = fullfile('/mnt', 'share-wrf1');
-            wrf2_folder = fullfile('/mnt', 'share-wrf2');
+            wrf1_folder = fullfile('/mnt', 'share-wrf1','BEHR-WRF');
+            wrf2_folder = fullfile('/mnt', 'share-wrf2','BEHR-WRF');
         elseif ispc
             drive_letter_request = 'Enter the drive letter (just the letter, not the ":\" that "%s" is mounted as';
             sat_folder = strcat(input(sprintf(drive_letter_request, 'share-sat'), 's'), ':');
-            wrf1_folder = strcat(input(sprintf(drive_letter_request, 'share-wrf1'), 's'), ':');
-            wrf2_folder = strcat(input(sprintf(drive_letter_request, 'share-wrf2'), 's'), ':');
+            wrf1_folder = strcat(input(sprintf(drive_letter_request, 'share-wrf1','BEHR-WRF'), 's'), ':');
+            wrf2_folder = strcat(input(sprintf(drive_letter_request, 'share-wrf2','BEHR-WRF'), 's'), ':');
         end
             
         
