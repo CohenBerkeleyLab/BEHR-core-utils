@@ -125,7 +125,7 @@ set_flags(data.AlbedoOceanFlag, 18, false, false, 'Ocean Albedo Flag: surface al
 % "mixed, <= 75% full inversions and <= 25% fill values". Having the cut
 % off be 2.5 will all some poor quality MODIS BRDFs to contribute to the
 % surface reflectance without automatically flagging it as poor quality.
-set_flags(data.MODISAlbedoQuality >= 2.5 | data.MODISAlbedoFillFlag, 19, false, false, 'MODIS BRDF quality worse than ( >= ) 2.5 or > 50% of MODIS grid cells had fill value');
+set_flags(data.MODISAlbedoQuality >= 2.5 | data.MODISAlbedoFillFlag, 19, true, false, 'MODIS BRDF quality worse than ( >= ) 2.5 or > 50% of MODIS grid cells had fill value');
 
 % Set a warning if the cloud pressure is smaller than tropopause pressure
 set_flags(data.TropoPresVSCldPres, 19, false, false, 'Cloud pressure is smaller than tropopause pressure');
