@@ -42,7 +42,7 @@ function [vcd, p_out, f_out] = integPr2(mixingRatio, pressure, pressureSurface, 
 
 E = JLLErrors;
 
-if nargin < 4;
+if nargin < 4
    pressureTropopause = min(pressure);
 end
 
@@ -50,7 +50,7 @@ if ~isscalar(pressureTropopause)
     E.badinput('PRESSURETROPOPAUSE must be a scalar')
 end
 
-if nargin < 5;
+if nargin < 5
     interpPres = [];
     if nargout > 1
         E.callError('nargout','Without any interpPres values, p_out and f_out will not be set');
@@ -60,9 +60,11 @@ else
         interpPres = max(interpPres,min(pressure));
 end
 
+
+
 if any(pressure<0)
     E.badinput('PRESSURE must be all >= 0')
-elseif any(diff(pressure)>0);
+elseif any(diff(pressure)>0)
     E.badinput('PRESSURE must be monotonically decreasing')
 end
 
@@ -89,8 +91,10 @@ df       = zeros(numel(f),1);
 
 numIP = numel(interpPres);
 if numIP > 0
-    if ~iscolumn(p); p_out = p'; 
-    else p_out = p;
+    if ~iscolumn(p)
+        p_out = p'; 
+    else
+        p_out = p;
     end
     f_out = f;
     for a=1:numIP
@@ -102,6 +106,18 @@ if numIP > 0
             f_out = [f_out(bottom); f_i; f_out(top)];
         end
     end
+end
+
+% If the surface pressure is above the tropopause pressure, i.e. the lower
+% integration limit is above the upper integration limit, return 0 b/c
+% unlike abstract integration where reversing the integration limits
+% reverses the sign, here, physically, if the surface pressure is above the
+% top limit, then there is no column between the surface and the top limit.
+% With this added here, we might want to remove the "pCld > pTropo" tests
+% in omiAmfAK2.
+if pressureSurface <= pressureTropopause
+    vcd = 0;
+    return
 end
 
 f0 = interpolate_surface_pressure(p,f,p0);
@@ -127,7 +143,7 @@ if isnan(pressureSurface)
     return
 end
 
-for i = 1:n-1;
+for i = 1:n-1
     deltaVcd(i) = (f(i) + f(i + 1)) .* (p(i) - p(i + 1)) ./ (2 * mg);  %assume const mixing ratio in each layer
     b = (log(max(f(i + 1),fmin)) - log(max(f(i),fmin))) ./ (log(p(i + 1)) - log(p(i)));
     

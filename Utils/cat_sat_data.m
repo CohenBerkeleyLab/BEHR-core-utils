@@ -40,6 +40,20 @@ function [ varargout ] = cat_sat_data( filepath, datafields, varargin )
 %       Indicates whether the structure concatenated should be the native
 %       pixels ('Data') or the gridded pixels ('OMI').
 %
+%       'reject_args' - a cell array of arguments to be passed to
+%       OMI_PIXEL_REJECT after the Data structure (so the second and later
+%       arguments). If not given (or an empty array) then OMI_PIXEL_REJECT
+%       is not called. If given, then pixels rejected by OMI_PIXEL_REJECT
+%       will be either replaced with NaN or (if 'vector' is true) removed.
+%       NOTE: in vector mode, all fields have rejected values removed.
+%       However, in all other modes, only numerical fields have rejected
+%       pixels set to NaN; e.g. logical fields will not be affected by
+%       pixel filtering.
+%
+%       'struct_out' - if false (default) each concatenated field is
+%       returned separately as its own output. If true, the fields are
+%       returned in a scalar structure.
+%
 %       'DEBUG_LEVEL' - set to 0 to suppress debugging messages, defaults
 %       to 1. Set to 'visual' to use the waitbar dialogue.
 %
@@ -71,11 +85,13 @@ end
 
 p=inputParser;
 p.addParameter('prefix','',@ischar);
-p.addParameter('startdate','');
-p.addParameter('enddate','');
+p.addParameter('startdate',0);
+p.addParameter('enddate','3000-01-01'); % pick a date far enough into the future that effectively all files will be before it
 p.addParameter('newdim',false);
 p.addParameter('vector',false);
 p.addParameter('varname','Data');
+p.addParameter('reject_args',{});
+p.addParameter('struct_out', false);
 p.addParameter('DEBUG_LEVEL',1,@(x) (ischar(x) || isnumeric(x) && isscalar(x)));
 
 p.parse(varargin{:});
@@ -87,6 +103,8 @@ enddate = pout.enddate;
 newdim = pout.newdim;
 vector_bool = pout.vector;
 varname = pout.varname;
+reject_args = pout.reject_args;
+do_output_struct = pout.struct_out;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
 if ~ismember(varname,{'Data','OMI'})
@@ -110,33 +128,9 @@ if ischar(DEBUG_LEVEL)
     end
 end
 
-if isempty(startdate)
-    startdate = 0;
-else
-    try
-        startdate = datenum(startdate);
-    catch err
-        if strcmp(err.identifier,'MATLAB:datenum:ConvertDateString')
-            E.badinput('startdate format was not recognized. See datestr and datenum documentation for proper formats')
-        else
-            rethrow(err)
-        end
-    end
-end
-
-if isempty(enddate)
-    enddate = datenum('3000-12-31'); % sufficiently far into the future
-else
-    try 
-        enddate = datenum(enddate);
-    catch err
-        if strcmp(err.identifier, 'MATLAB:datenum:ConvertDateString')
-            E.badinput('enddate format was not recognized. See datestr and datenum documentation for proper formats');
-        else
-            rethrow(err)
-        end
-    end
-end
+startdate = validate_date(startdate);
+enddate = validate_date(enddate);
+date_array = [startdate(:), enddate(:)];
 
 if startdate > enddate
     E.badinput('startdate is later than enddate.')
@@ -165,7 +159,7 @@ else
 end
 
 % Prep output - we'll always include the date and swath as the last output
-varargout = cell(1,numel(datafields)+1);
+output_data = cell(1,numel(datafields)+1);
 
 % Loop over all files (within the date limits given). Load the data
 % variable, look for the datafields given, and add their data to the output
@@ -181,7 +175,8 @@ for a=1:numel(F)
     if load_data
         [s,e] = regexp(F(a).name, '\d\d\d\d\d\d\d\d');
         filedate = datenum(F(a).name(s:e), 'yyyymmdd');
-        if filedate < startdate || filedate > enddate
+        in_date_ranges = filedate >= date_array(:,1) & filedate <= date_array(:,2);
+        if ~any(in_date_ranges)
             continue
         end
         
@@ -212,26 +207,46 @@ for a=1:numel(F)
         for c=1:numel(Data)
             this_field = Data(c).(datafields{b});
             this_date_and_swath = format_date_swath_cell(Data(c), size(this_field));
+            
+            if ~isempty(reject_args)
+                Data(c).Areaweight = ones(size(Data(c).Longitude));
+                Data(c) = omi_pixel_reject(Data(c), reject_args{:});
+                xx_keep = Data(c).Areaweight > 0;
+                if vector_bool
+                    this_field(~xx_keep) = [];
+                    this_date_and_swath(~xx_keep) = [];
+                else
+                    % Logical fields cannot have values set to NaN. Since
+                    % only numeric fields should really be filtered for low
+                    % quality data, this shouldn't be a problem.
+                    if isnumeric(this_field)
+                        this_field(~xx_keep) = NaN;
+                    end
+                    % No need to set date and swath to NaNs, we just want
+                    % to mark bad data as invalid.
+                end
+            end
+            
             if newdim
                 n = ndims(this_field);
-                varargout{b} = cat(n+1, varargout{b}, this_field);
+                output_data{b} = cat(n+1, output_data{b}, this_field);
                 if b == 1
-                    varargout{end} = cat(n+1, varargout{end}, this_date_and_swath);
+                    output_data{end} = cat(n+1, output_data{end}, this_date_and_swath);
                 end
             elseif vector_bool
-                varargout{b} = cat(1, varargout{b}, this_field(:));
+                output_data{b} = cat(1, output_data{b}, this_field(:));
                 if b == 1
-                    varargout{end} = cat(1, varargout{end}, this_date_and_swath(:));
+                    output_data{end} = cat(1, output_data{end}, this_date_and_swath(:));
                 end
             elseif ~newdim && ismatrix(Data(c).(datafields{b}))
-                varargout{b} = cat(1, varargout{b}, this_field);
+                output_data{b} = cat(1, output_data{b}, this_field);
                 if b == 1
-                    varargout{end} = cat(1, varargout{end}, this_date_and_swath);
+                    output_data{end} = cat(1, output_data{end}, this_date_and_swath);
                 end
             elseif ~newdim && ~ismatrix(Data(c).(datafields{b}))
-                varargout{b} = cat(2, varargout{b}, this_field);
+                output_data{b} = cat(2, output_data{b}, this_field);
                 if b == 1
-                    varargout{end} = cat(2, varargout{end}, this_date_and_swath);
+                    output_data{end} = cat(2, output_data{end}, this_date_and_swath);
                 end
             else
                 E.notimplemented(sprintf('concat case: newdim = %d and ndims = %d',newdim,ndims(Data(c).(datafields{b}))));
@@ -242,6 +257,16 @@ end
 
 if wbbool
     close(wb);
+end
+
+if do_output_struct
+    output_field_names = veccat(datafields, {'DateAndSwath'});
+    % Have to put the date/orbit cell array into a parent cell array to
+    % avoid creating a multielement structure 
+    output_data{end} = {output_data{end}}; %#ok<CCAT1>
+    varargout{1} = make_struct_from_field_values(output_field_names, output_data);
+else
+    varargout = output_data;
 end
 
 end

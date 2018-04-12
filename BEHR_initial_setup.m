@@ -201,32 +201,52 @@ build_omi_python();
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     function build_omi_python
         fprintf('\n');
-        build_omi_cmd = 'python setup.py install --user';
+        % Get the version of python that Matlab will use
+        [~, py_exe] = pyversion;
+        build_omi_cmd = sprintf('%s setup.py build', py_exe);
+        install_omi_cmd = sprintf('%s setup.py install --user', py_exe);
         psm_dir = fullfile(behr_paths.psm_dir, 'omi');
         
         if exist(psm_dir, 'dir')
             fprintf('BEHR relies on the omi Python package. This needs to be built and installed on your Python path.\n');
-            fprintf('I can try to do this for you; I would run:\n\n\t%s\n\nin %s\n', build_omi_cmd, behr_paths.psm_dir);
+            fprintf('I can try to do this for you; I would run:\n\n\t%s\n\nfollowed by\n\n\t%s\n\nin %s\n\n', build_omi_cmd, install_omi_cmd, psm_dir);
+            fprintf('I am using the Python executable that Matlab will use. You can change this with the pyversion() function.\n\n');
+            fprintf('If you change Python versions for Matlab, you should rebuild the omi package. To do a completely clean build,\ndelete the "build" folder in %s\n\n', psm_dir);
             fprintf('Should I try to build the omi package? If not, you can do it manually later.\n');
-            if strcmpi(input('  Enter y to build, anything else to skip: ', 's'), 'y');
+            if strcmpi(input('  Enter y to build, anything else to skip: ', 's'), 'y')
                 fprintf('Trying to build the omi package...\n');
                 oldwd = cd(psm_dir);
                 try
-                    [psm_status, psm_result] = system(build_omi_cmd);
+                    [build_status, build_result] = system(build_omi_cmd);
+                catch err
+                    cd(oldwd);
+                    rethrow(err);
+                end
+                
+                if build_status == 0
+                    fprintf('%s\n\n', build_result)
+                else
+                    fprintf('Build failed. Output from build command:\n%s\n', build_result);   
+                end
+                
+                try
+                    [install_status, install_result] = system(install_omi_cmd);
                 catch err
                     cd(oldwd);
                     rethrow(err);
                 end
                 cd(oldwd);
                 
-                if psm_status == 0
-                    fprintf('%s\n\n', psm_result);
+                if install_status == 0
+                    fprintf('%s\n\n', install_result);
                     fprintf('Build appears to be successful.\n');
                 else
-                    fprintf('Build failed. Output from install command:\n%s\n', psm_result);
+                    fprintf('Build failed. Output from install command:\n%s\n', install_result);
                 end
             else
-                fprintf('To build the omi package yourself, execute "%s" in %s\n', build_omi_cmd, psm_dir);
+                fprintf('\nTo build the omi package yourself, execute "%s" followed by "%s"\nin %s\n\n', build_omi_cmd, install_omi_cmd, psm_dir);
+                fprintf('Note that your PATH and PYTHONPATH environmental variables may differ in the Terminal vs. the GUI Matlab.\n');
+                fprintf('If you experience difficultly with the PSM package after building in the Terminal, try building from Matlab instead.\n');
             end
         else
             fprintf('The PSM directory (%s) in behr_paths is invalid. Fix that and rerun BEHR_initial_setup, or build the omi package manually.\n', behr_paths.psm_dir);
