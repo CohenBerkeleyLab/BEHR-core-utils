@@ -99,8 +99,10 @@ if size(temperature,1) ~= length(pressure)
 end
 
 alpha = 1 - 0.003 * (temperature - 220);   % temperature correction factor vector
-alpha_i=max(alpha,0.1);
-alpha = min(alpha_i,10);
+% Keep NaNs in alpha, that way the scattering weights will be fill values
+% for levels where we don't have temperature data.
+alpha_i=max(alpha,0.1,'includenan');
+alpha = min(alpha_i,10,'includenan');
 
 
 % Integrate to get clear and cloudy AMFs
