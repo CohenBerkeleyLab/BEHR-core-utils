@@ -60,28 +60,7 @@ else
         interpPres = max(interpPres,min(pressure));
 end
 
-% If the surface pressure is above the tropopause pressure, i.e. the lower
-% integration limit is above the upper integration limit, return 0 b/c
-% unlike abstract integration where reversing the integration limits
-% reverses the sign, here, physically, if the surface pressure is above the
-% top limit, then there is no column between the surface and the top limit.
-% With this added here, we might want to remove the "pCld > pTropo" tests
-% in omiAmfAK2.
-if pressureSurface <= pressureTropopause
-    vcd = 0;
-    % returning these unchanged might pose issues if code expects the
-    % intepolation pressures to be added. At the moment this is a quick
-    % kludge because (a) the code to insert the interp pressures isn't set
-    % up to be reused easily and (b) I'm adding this because
-    % interpolate_surface_pressure ran into an issue when pressureSurface <
-    % pressureTropopause because it ended up with the last two pressure
-    % entries being the same, so the interpolation failed. So handling
-    % interpolation pressures outside the range of pressures defined might
-    % take some more significant reworking.
-    p_out = pressure;
-    f_out = mixingRatio;
-    return
-end
+
 
 if any(pressure<0)
     E.badinput('PRESSURE must be all >= 0')
@@ -127,6 +106,18 @@ if numIP > 0
             f_out = [f_out(bottom); f_i; f_out(top)];
         end
     end
+end
+
+% If the surface pressure is above the tropopause pressure, i.e. the lower
+% integration limit is above the upper integration limit, return 0 b/c
+% unlike abstract integration where reversing the integration limits
+% reverses the sign, here, physically, if the surface pressure is above the
+% top limit, then there is no column between the surface and the top limit.
+% With this added here, we might want to remove the "pCld > pTropo" tests
+% in omiAmfAK2.
+if pressureSurface <= pressureTropopause
+    vcd = 0;
+    return
 end
 
 f0 = interpolate_surface_pressure(p,f,p0);
