@@ -129,19 +129,19 @@ nP = size(swPlev,1);
 
 
 for i=1:numel(pTerr)
-    vcdGnd(i) = integPr2(no2Profile(:,i), pressure, pTerr(i),pTropo(i));  
-    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0 && pCld(i)>pTropo(i);
-        vcdCld(i) = integPr2(no2Profile(:,i), pressure, pCld(i),pTropo(i));
+    vcdGnd(i) = integPr2(no2Profile(:,i), pressure, pTerr(i), pTropo(i), 'fatal_if_nans', true);  
+    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0 && pCld(i)>pTropo(i)
+        vcdCld(i) = integPr2(no2Profile(:,i), pressure, pCld(i), pTropo(i), 'fatal_if_nans', true);
     else
         vcdCld(i)=0;
     end
-    if cldFrac(i) ~= 1 && cldRadFrac(i) ~= 1;
-        amfClr(i) = integPr2((no2Profile(:,i).*dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i),pTropo(i)) ./ vcdGnd(i);
+    if cldFrac(i) ~= 1 && cldRadFrac(i) ~= 1
+        amfClr(i) = integPr2((no2Profile(:,i).*dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i), pTropo(i), 'fatal_if_nans', true) ./ vcdGnd(i);
     else
         amfClr(i)=0;
     end
-    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0 && pCld(i)>pTropo(i);
-        cldSCD=integPr2((no2Profile(:,i).*dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i),pTropo(i));
+    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0 && pCld(i)>pTropo(i)
+        cldSCD=integPr2((no2Profile(:,i).*dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i), pTropo(i), 'fatal_if_nans', true);
         amfCld(i) = cldSCD ./ vcdGnd(i);
     else
         amfCld(i)=0;
@@ -152,9 +152,9 @@ for i=1:numel(pTerr)
     % Added these lines to interpolate to the terrain & cloud pressures and
     % output a vector - this results in better agreement between our AMF and
     % the AMF calculated from "published" scattering weights.
-    [~, ~, this_no2ProfileInterp] = integPr2(no2Profile(:,i), pressure, pTerr(i),pTropo(i), [pTerr(i), pCld(i),pTropo(i)]);
-    [~,this_swPlev,this_swClr] = integPr2((dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i),pTropo(i), [pTerr(i), pCld(i),pTropo(i)]);
-    [~,~,this_swCld] = integPr2((dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i),pTropo(i), [pTerr(i), pCld(i),pTropo(i)]);
+    [~, ~, this_no2ProfileInterp] = integPr2(no2Profile(:,i), pressure, pTerr(i), pTropo(i), 'interp_pres', [pTerr(i), pCld(i),pTropo(i)], 'fatal_if_nans', true);
+    [~,this_swPlev,this_swClr] = integPr2((dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i), pTropo(i), 'interp_pres', [pTerr(i), pCld(i),pTropo(i)], 'fatal_if_nans', true);
+    [~,~,this_swCld] = integPr2((dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i), pTropo(i), 'interp_pres', [pTerr(i), pCld(i),pTropo(i)], 'fatal_if_nans', true);
     
     if ~iscolumn(this_swPlev)
         E.badvar('this_swPlev','Must be a column vector');
@@ -254,20 +254,26 @@ for i=1:numel(pTerr)
    swPlev_i = swPlev(:,i);
    swClr_i = swClr(:,i);
    swCld_i = swCld(:,i);
-   not_nans_i = ~isnan(swPlev_i) & ~isnan(swClr_i) & ~isnan(swCld_i);
-   if ~all(not_nans_i == (~isnan(swPlev_i) | ~isnan(swClr_i) | ~isnan(swCld_i))) && ~all(isnan(swPlev_i)) && ~all(isnan(swClr_i)) && ~all(isnan(swCld_i))
-       % Error called if there are NaNs present in some but not all
-       % of these vectors AND none of the vectors is all NaNs
-       % If one of the vectors is all NaNs, then the mismatch is
-       % okay because the AMF will just end up being a NaN anyway - 
+   not_nans_i = ~isnan(swClr_i) & ~isnan(swCld_i);
+   if ~all(not_nans_i == (~isnan(swClr_i) | ~isnan(swCld_i)))
+       % Error called if there are NaNs present in one but not both of
+       % these vectors. Previously had checked if the NaNs matched those in
+       % the pressure levels, but once I fixed it so that alpha retained
+       % NaNs that were in temperature, that was no longer useful, since
+       % pressure will never have NaNs unless they were appended to ensure
+       % equal length vectors when surface, cloud, or tropopause pressure
+       % are one of the standard pressures, but the scattering weights will
+       % have NaNs where the WRF temperature profile doesn't reach.
        E.callError('nan_mismatch','NaNs are not the same in the swPlev, swClr, and swCld vectors');
    end
    
    ii = swPlev_i > pTerr(i) & ~isnan(swPlev_i);
+   sc_weights_clr(ii,i) = 1e-30; 
    swClr_i(ii)=1e-30;
    
    ii = swPlev_i > pCld(i) & ~isnan(swPlev_i);
    swCld_i(ii)=1e-30;
+   sc_weights_cld(ii,i) = 1e-30;
 
    % 17 Nov 2017 - switched to outputting separate clear and cloudy
    % scattering weights
