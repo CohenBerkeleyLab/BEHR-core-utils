@@ -104,9 +104,14 @@ set_flags(data.BEHRAMFTrop <= behr_min_amf_val() | isnan(data.BEHRAMFTrop)...
 % own quality summary flag was set)
 set_flags(mod(data.VcdQualityFlags, 2) ~= 0, 4, true, true, 'VcdQualityFlags: NASA summary flag set');
 
-% Set an error flag if the XTrackQualityFlags fields is ~= 0, i.e. it has
-% been affected by the row anomaly
-set_flags(data.XTrackQualityFlags ~= 0, 5, true, true, 'XTrackQualityFlags: NASA flag > 0');
+% Set an error flag if the XTrackQualityFlags fields is > 0, i.e. it has
+% been affected by the row anomaly. Had to switch away from ~= 0 because
+% NaN ~= 0 will return true, but NaN > 0 will return false. For early files
+% (~2006 to ~Nov 2008 last I checked), the XTrackQualityFlags fields seems
+% to have all fill values, for orbits not affected by the row anomaly, so
+% this relies on fill values being imported as NaNs and thus not triggering
+% this logical test.
+set_flags(data.XTrackQualityFlags > 0, 5, true, true, 'XTrackQualityFlags: NASA flag > 0');
 
 
 %%%%%%%%%%%%%%%%%

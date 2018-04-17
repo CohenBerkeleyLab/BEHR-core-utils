@@ -184,7 +184,7 @@ for i = 1:n-1
     
 end
 
-if any(isnan(deltaVcd(i_initial:i_end))) && ~all(isnan(deltaVcd(i_initial:i_end)))
+if any(isnan(deltaVcd(i_initial:i_end)))
     if fatal_if_nans
         E.callError('nans_in_column', 'NaNs detected in partial columns.')
     else
