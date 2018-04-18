@@ -1,5 +1,4 @@
-
-function [ no2_bins, temp_bins, wrf_file, TropoPres, pres_bins, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, lon, lat, loncorns, latcorns, omi_time, surfPres, pressures, wrf_output_path )
+function [ no2_bins, temp_bins, wrf_file, TropoPres, tropopause_interp_flag, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, surfPres, pressures, varargin )
 
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
@@ -43,8 +42,8 @@ function [ no2_bins, temp_bins, wrf_file, TropoPres, pres_bins, pres_mode, temp_
 %       dimension has size 4 (i.e. loncorn(:,a) would give all 4 corners
 %       for pixel a).
 %
-%       omi_time: the starting time of the OMI swath in TAI93 (the time 
-%       format given in the OMNO2 files). Used to match up daily profiles 
+%       omi_time: the starting time of the OMI swath in TAI93 (the time
+%       format given in the OMNO2 files). Used to match up daily profiles
 %       to the OMI swath.
 %
 %       surfPres: a 1- or 2-D array containing the GLOBE surface pressures
@@ -60,10 +59,37 @@ function [ no2_bins, temp_bins, wrf_file, TropoPres, pres_bins, pres_mode, temp_
 %       string, the proper WRF directory will be found, just as if this
 %       input was omitted.
 %
+%
+%   Additional parameter inputs:
+%
+%       err_missing_att: controls whether an error is thrown if attributes
+%       in WRF files cannot be found (true, which is the default) or
+%       default values are assumed (false). Use with caution, as when set
+%       to "false" there will be no error checking of the units in WRF
+%       files.
+%
 %   Josh Laughner <joshlaugh5@gmail.com> 22 Jul 2015
 
-DEBUG_LEVEL = 1;
 E = JLLErrors;
+
+parser = inputParser;
+parser.addOptional('wrf_output_path', '', @ischar);
+parser.addParameter('err_missing_att', true);
+parser.addParameter('DEBUG_LEVEL', 1);
+
+parser.parse(varargin{:});
+pout = parser.Results;
+
+DEBUG_LEVEL = pout.DEBUG_LEVEL;
+error_if_missing_attr = pout.err_missing_att;
+wrf_output_path = pout.wrf_output_path;
+
+if ~isnumeric(DEBUG_LEVEL) || ~isscalar(DEBUG_LEVEL)
+    E.badinput('DEBUG_LEVEL must be a scalar number')
+end
+if ~islogical(error_if_missing_attr) || ~isscalar(error_if_missing_attr)
+    E.badinput('The parameter "err_missing_att" must be a scalar logical');
+end
 
 % Defining custom errors
 % Error for failing to find netCDF variable that is more descriptive about
@@ -109,7 +135,7 @@ end
 
 % Get the WRF output path - this function will itself throw an error if the
 % profile mode is wrong or the path does not exist.
-if ~exist('wrf_output_path', 'var') || isempty(wrf_output_path)
+if isempty(wrf_output_path)
     wrf_output_path = find_wrf_path(region, profile_mode, date_in);
 else
     if ~ischar(wrf_output_path)
@@ -124,29 +150,27 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file,wrf_tropopres, pres_mode, temp_mode] = load_wrf_vars();
-TropoPres = griddata(double(wrf_lon(:)), double(wrf_lat(:)), double(wrf_tropopres(:)), lon, lat);
-
+[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file,wrf_tropopres, pres_mode, temp_mode,tropopause_interp_indx] = load_wrf_vars();
 num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
-
 num_pix = numel(surfPres);
 no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
-pres_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
 temp_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
+TropoPres = nan(size(surfPres));
+tropopause_interp_flag = false(size(surfPres));
 
 if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
     error('rProfile_WRF:wrf_dim','wrf_lon and wrf_lat should be 2D');
 end
 wrf_lon_bnds = [wrf_lon(1,1), wrf_lon(1,end), wrf_lon(end,end), wrf_lon(end,1)];
 wrf_lat_bnds = [wrf_lat(1,1), wrf_lat(1,end), wrf_lat(end,end), wrf_lat(end,1)];
-    
+
 
 % If the WRF profiles are spaced at intervals larger than the smallest dimension
 % of OMI pixels, interpolate instead of averaging b/c we will likely have at least
 % some pixels with no profiles within them.
 
-    
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% BIN PROFILES TO PIXELS %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -168,19 +192,20 @@ wrf_temp = reshape(wrf_temp, prof_length, num_profs);
 wrf_pres = reshape(wrf_pres, prof_length, num_profs);
 wrf_lon = reshape(wrf_lon, 1, num_profs);
 wrf_lat = reshape(wrf_lat, 1, num_profs);
-
+wrf_tropopres = reshape(wrf_tropopres, 1, num_profs);
 
 lons = squeeze(nanmean(loncorns,1));
 lats = squeeze(nanmean(latcorns,1));
-for p=1:num_pix%%%%temp
+for p=1:num_pix
     if ~inpolygon(lons(p), lats(p), wrf_lon_bnds, wrf_lat_bnds)
         continue
     end
-    [pres_bins(:,p),no2_bins(:,p), temp_bins(:,p)] = avg_apriori();
-    
+
+    [no2_bins(:,p), temp_bins(:,p), TropoPres(p), tropopause_interp_flag(p)] = avg_apriori();    
 end
 
-    function [pres_vec, no2_vec, temp_vec] = avg_apriori()
+
+    function [no2_vec, temp_vec, pTropo, trop_interp_flag] = avg_apriori()
         xall = loncorns(:,p);
         xall(5) = xall(1);
         
@@ -197,6 +222,13 @@ end
         tmp_pres = wrf_pres(:,xx);
         tmp_lon = wrf_lon(xx);
         tmp_lat = wrf_lat(xx);
+        tmp_pTropo = wrf_tropopres(xx);
+        
+        if any(xx(tropopause_interp_indx))
+            trop_interp_flag = true;
+        else
+            trop_interp_flag = false;
+        end
         
         yy = inpolygon(tmp_lon, tmp_lat, xall, yall);
         
@@ -204,13 +236,15 @@ end
             %E.callError('no_prof','WRF Profile not found for pixel near %.1, %.1f',mean(xall),mean(yall));
             no2_vec = nan(length(pressures),1);
             temp_vec = nan(length(pressures),1);
-            pres_vec = nan(length(pressures),1);
+            pTropo = nan;
             return
         end
         
         tmp_no2(:,~yy) = [];
         tmp_temp(:,~yy) = [];
         tmp_pres(:,~yy) = [];
+        tmp_pTropo(~yy) = [];
+        
         
         % Interpolate all the NO2 and temperature profiles to the input
         % pressures, then average them. Extrapolate so that later we can be
@@ -227,42 +261,36 @@ end
         %   z \propto ln(p)
         %
         % therefore, T should be proportional to ln(p)
-        
+
         interp_no2 = nan(length(pressures), size(tmp_no2,2));
         interp_temp = nan(length(pressures), size(tmp_temp,2));
         
         if ~iscolumn(pressures); pressures = pressures'; end
         
-        % replace one pressure level by tropopause pressure
-        pres_vec = pressures;
-        last_up_surf = find(pres_vec <= TropoPres(p),1,'first');
-        pres_vec(last_up_surf) = TropoPres(p);
-        
-        
         for a=1:size(tmp_no2,2)
-            interp_no2(:,a) = interp1(log(tmp_pres(:,a)), log(tmp_no2(:,a)), log(pres_vec), 'linear', 'extrap');
-            interp_temp(:,a) = interp1(log(tmp_pres(:,a)), tmp_temp(:,a), log(pres_vec), 'linear', 'extrap');
+            interp_no2(:,a) = interp1(log(tmp_pres(:,a)), log(tmp_no2(:,a)), log(pressures), 'linear', 'extrap');
+            interp_temp(:,a) = interp1(log(tmp_pres(:,a)), tmp_temp(:,a), log(pressures), 'linear', 'extrap');
         end
         
         interp_no2 = exp(interp_no2);
         % do not need exp(interp_temp) since did not take the log of
         % tmp_temp
         
-        last_below_surf = find(pres_vec > surfPres(p),1,'last')-1;
+        last_below_surf = find(pressures > surfPres(p),1,'last')-1;
         interp_no2(1:last_below_surf,:) = nan;
         interp_temp(1:last_below_surf,:) = nan;
         
-       
-        % define the upper limit of pressure
-        last_up_surf = last_up_surf+1;
-        interp_no2(last_up_surf:end,:) = nan;
-        interp_temp(last_up_surf:end,:) = nan;
+        pTropo = nanmean(tmp_pTropo);
+        last_up_tropo = find(pressures < pTropo,1,'first')+1;
+        interp_no2(last_up_tropo:end,:) = nan;
+        interp_temp(last_up_tropo:end,:) = nan;
         
         no2_vec = nanmean(interp_no2,2);
         temp_vec = nanmean(interp_temp,2);
+        
     end
 
-   function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres,pressure_mode, temperature_mode] = load_wrf_vars()
+   function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres,pressure_mode, temperature_mode,tropopause_interp_indx] = load_wrf_vars()
        % Find the file for this day and the nearest hour May be "wrfout" or
         % "wrfout_subset"
         year_in = year(date_num_in);
@@ -281,20 +309,20 @@ end
         
         F = dir(fullfile(wrf_output_path,file_name));
         if numel(F) < 1 && strcmpi(profile_mode, 'daily')
-            % For daily profiles, try the unsanitized name (with colons) 
+            % For daily profiles, try the unsanitized name (with colons)
             % if we haven't found a file
             F = dir(fullfile(wrf_output_path, file_name2));
         end
-
+        
         % Ensure we found exactly 1 file
-        if numel(F) < 1 
+        if numel(F) < 1
             E.filenotfound(file_name);
         elseif numel(F) > 1
             E.toomanyfiles(file_name);
         else
             wrf_info = ncinfo(fullfile(wrf_output_path,F(1).name));
         end
-
+        
         % Load NO2 and check what unit it is - we'll use that to convert to
         % parts-per-part later. Make the location of units as general as possible
         try
@@ -307,26 +335,12 @@ end
             end
         end
         
-        try
-            % In the files from Hugo for Hong Kong, the attributes have
-            % extra spaces at the end, so we need to get rid of those
-            % spaces.
-            wrf_no2_units = strtrim(ncreadatt(wrf_info.Filename, 'no2', 'units'));
-        catch err
-            % If we cannot find the attribute "units" in the file for some
-            % reason
-            if strcmp(err.identifier, 'MATLAB:imagesci:netcdf:libraryFailure')
-                if DEBUG_LEVEL > 1; fprintf('\tWRF NO2 unit not identified. Assuming ppm\n'); end
-                wrf_no2_units = 'ppm';
-            else
-                rethrow(err);
-            end
-        end
+        wrf_no2_units = ncreadatt_default(wrf_info.Filename, 'no2', 'units', 'ppm', 'fatal_if_missing', error_if_missing_attr);
         
         % Convert to be an unscaled mixing ratio (parts-per-part). Allow
         % the units to be different capitalization (i.e. since CMAQ seems
         % to output units of ppmV instead of ppm or ppmv).
-        wrf_no2 = convert_units(wrf_no2, wrf_no2_units, 'ppp');
+        wrf_no2 = convert_units(wrf_no2, wrf_no2_units, 'ppp', 'case', false);
         
         wrf_vars = {wrf_info.Variables.Name};
         pres_precomputed = ismember('pres', wrf_vars);
@@ -342,13 +356,13 @@ end
             % an absolute temperature
             if temp_precomputed
                 wrf_temp = ncread(wrf_info.Filename, 'TT');
-                temp_units = strtrim(ncreadatt(wrf_info.Filename, 'TT', 'units'));
+                temp_units = ncreadatt_default(wrf_info.Filename, 'TT', 'units', 'K', 'fatal_if_missing', error_if_missing_attr);
                 if ~strcmp(temp_units, 'K')
                     E.notimplemented('WRF temperature not in Kelvin');
                 end
                 temperature_mode = 'precomputed';
             else
-                wrf_temp = convert_wrf_temperature(wrf_info.Filename);
+                wrf_temp = convert_wrf_temperature(wrf_info.Filename, 'err_if_missing_units', error_if_missing_attr);
                 temperature_mode = 'online';
             end
             
@@ -356,31 +370,23 @@ end
                 varname = 'pres';
                 p_tmp = ncread(wrf_info.Filename, varname);
                 pb_tmp = 0; % Allows us to skip a second logical test later
-                p_units = strtrim(ncreadatt(wrf_info.Filename, 'pres', 'units'));
+                p_units = ncreadatt_default(wrf_info.Filename, 'pres', 'units','Pa', 'fatal_if_missing', error_if_missing_attr);
                 pb_units = p_units;
-
                 pressure_mode = 'precomputed';
-               % edited by qindan zhu, 02/07/2018.
-                % read tropopause pressure from wrf.
-                [~,wrf_tropopres] = find_wrf_tropopause( wrf_info );
-
             else
                 varname = 'P';
                 p_tmp = ncread(wrf_info.Filename, varname);
-                p_units = strtrim(ncreadatt(wrf_info.Filename, 'P', 'units'));
+                p_units = ncreadatt_default(wrf_info.Filename, 'P', 'units', 'Pa', 'fatal_if_missing', error_if_missing_attr);
                 varname = 'PB';
                 pb_tmp = ncread(wrf_info.Filename, varname);
-                pb_units = strtrim(ncreadatt(wrf_info.Filename, 'PB', 'units'));
+                pb_units = ncreadatt_default(wrf_info.Filename, 'PB', 'units', 'Pa', 'fatal_if_missing', error_if_missing_attr);
                 pressure_mode = 'online';
-                % edited by qindan zhu, 02/07/2018.
-                % read tropopause pressure from wrf.
-                pres = (P+PB)/100;
-                [~,wrf_tropopres] = find_wrf_tropopause( wrf_info );
             end
             varname = 'XLONG';
             wrf_lon = ncread(wrf_info.Filename, varname);
             varname = 'XLAT';
             wrf_lat = ncread(wrf_info.Filename, varname);
+            [~,wrf_tropopres] = find_wrf_tropopause( wrf_info );
         catch err
             if strcmp(err.identifier,'MATLAB:imagesci:netcdf:unknownLocation')
                 E.callCustomError('ncvar_not_found',varname,F(1).name);
@@ -392,7 +398,7 @@ end
         % extrapolation wrf tropopause pressure when it's equal to 0
         tropopause_interp_indx = (wrf_tropopres == 0);
 
-        if any(any(tropopause_interp_indx)) 
+        if any(tropopause_interp_indx(:)) 
             indx_nan = isnan(wrf_tropopres);
             wrf_tropopres(tropopause_interp_indx) = nan;
             
@@ -411,6 +417,7 @@ end
             wrf_tropopres(2:end-1,2:end-1) = tp_nonbc;
                 
             %%% interpolate the rest of domain    
+
             indx = ~isnan(wrf_tropopres);
             wrf_lon_good = wrf_lon(indx);
             wrf_lat_good = wrf_lat(indx);
