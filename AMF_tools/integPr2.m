@@ -1,6 +1,32 @@
-%%integPr
-%%arr 07/28/2008
+% INTEGPR2 Integrate mixing ratios over pressure
+%
+%   VCD = INTEGPR2(MIXINGRATIO, PRESSURE, PRESSURESURFACE) Integrates the
+%   profile given by MIXINGRATIO (which must be unscaled, i.e. mol/mol or
+%   volume/volume) defined at the vertical levels given by PRESSURE (which
+%   must be monotonically decreasing and given in hPa). PRESSURESURFACE is
+%   the lower level of integration, must be a scalar also given in hPa. The
+%   upper limit is taken as the minimum value in PRESSURE.
+%
+%   VCD = INTEGPR2( ___, PRESSURETROPOPAUSE) will integrate up to
+%   PRESSURETROPOPAUSE instead of the minimum value in PRESSURE.
+%
+%   [ VCD, P_OUT, F_OUT ] = INTEGPR2( ___, 'interp_pres', INTERP_PRES )
+%   Allows you to specify one or more pressures as the vector INTERP_PRES
+%   that the mixing ratio vector will be interpolated to. P_OUT will be
+%   PRESSURES with the INTERP_PRES inserted and F_OUT will be the vector of
+%   mixing ratios with extra entries corresponding to the INTERP_PRES
+%   pressures. Note that the size of P_OUT and F_OUT are not guaranteed to
+%   be numel(pressures) + numel(interp_pres); if any of the INTERP_PRES
+%   pressures are already present in PRESSURES, then no extra level will be
+%   added for that INTERP_PRES value.
+%
+%   [ ___ ] = INTEGPR2( ___, 'fatal_if_nans', true ) will cause INTEGPR2 to
+%   throw an error if any of the mixing ratio values between the lower and
+%   upper integration limits are NaNs. This allows you to ensure that your
+%   profile is fully defined over all relevant pressures. If this parameter
+%   is not given, a warning will still be issued if NaNs are detected.
 
+% Legacy comment block from Ashley Russell:
 %..........................................................................
 % Integrates vector of mixing ratios (cm-3) above pressureSurface as function of pressure (hPa)
 % to get vertical column densities (cm-2). Computes piecewise in layers between two pressures.
@@ -37,30 +63,20 @@
 %
 %..........................................................................
 
-%function vcd = integPr(mixingRatio, pressure, pressureSurface, mixingRatioStd, vcdStd, corrLength) %mixingRatioStd, vcdStd, corrLength = 0 or 1
-function [vcd, p_out, f_out] = integPr2(mixingRatio, pressure, pressureSurface, pressureTropopause, interpPres)
+function [vcd, p_out, f_out] = integPr2(mixingRatio, pressure, pressureSurface, varargin)
 
 E = JLLErrors;
+p = inputParser;
+p.addOptional('pressureTropopause', [], @(x) isscalar(x) && isnumeric(x) && (isnan(x) || x > 0));
+p.addParameter('interp_pres', []);
+p.addParameter('fatal_if_nans', false);
 
-if nargin < 4
-   pressureTropopause = min(pressure);
-end
+p.parse(varargin{:});
+pout = p.Results;
 
-if ~isscalar(pressureTropopause)
-    E.badinput('PRESSURETROPOPAUSE must be a scalar')
-end
-
-if nargin < 5
-    interpPres = [];
-    if nargout > 1
-        E.callError('nargout','Without any interpPres values, p_out and f_out will not be set');
-    end
-else
-    % Make sure the interpolation pressure is not less than the 
-        interpPres = max(interpPres,min(pressure));
-end
-
-
+pressureTropopause = pout.pressureTropopause;
+interpPres = pout.interp_pres;
+fatal_if_nans = pout.fatal_if_nans;
 
 if any(pressure<0)
     E.badinput('PRESSURE must be all >= 0')
@@ -71,6 +87,21 @@ end
 if ~isscalar(pressureSurface)
     E.badinput('PRESSURESURFACE must be a scalar')
 end
+
+if isempty(pressureTropopause)
+   pressureTropopause = min(pressure);
+end
+
+if isempty(interpPres)
+    if nargout > 1
+        E.callError('nargout','Without any interpPres values, p_out and f_out will not be set');
+    end
+else
+    % Make sure the interpolation pressure is within the pressure vector
+    % given.
+    interpPres = clipmat(interpPres, min(pressure), max(pressure));
+end
+
 
 %   mean molecular mass (kg)  *  g (m/s2)  *  (Pa/hPa)   *   (m2/cm2)
 mg  = (28.97/6.02E23)*1E-3    *   9.8      *    1E-2     *     1E4;
@@ -153,8 +184,12 @@ for i = 1:n-1
     
 end
 
-if any(isnan(deltaVcd(i_initial:i_end))) && ~all(isnan(deltaVcd(i_initial:i_end)))
-    warning('NaNs detected in partial columns. They will not be added into the total column density.')
+if any(isnan(deltaVcd(i_initial:i_end)))
+    if fatal_if_nans
+        E.callError('nans_in_column', 'NaNs detected in partial columns.')
+    else
+        warning('integPr2:nans_in_column', 'NaNs detected in partial columns. They will not be added into the total column density.')
+    end
 end
 vcd = nansum2(deltaVcd(i_initial:i_end));
 

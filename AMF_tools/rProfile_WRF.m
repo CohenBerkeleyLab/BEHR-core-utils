@@ -406,12 +406,30 @@ end
                 rethrow(err);
             end
         end
+
         % extrapolation wrf tropopause pressure when it's equal to 0
         tropopause_interp_indx = (wrf_tropopres == 0);
 
         if any(tropopause_interp_indx(:)) 
             indx_nan = isnan(wrf_tropopres);
             wrf_tropopres(tropopause_interp_indx) = nan;
+            
+            %%% interplate the edge of wrf domain
+            tp_nonbc = wrf_tropopres(2:end-1,2:end-1);
+            wrf_tropopres(2:end-1,2:end-1) = nan;
+            indx = ~isnan(wrf_tropopres);
+            wrf_lon_good = wrf_lon(indx);
+            wrf_lat_good = wrf_lat(indx);
+            wrf_tropo_good = wrf_tropopres(indx);
+            TropoScatObj = scatteredInterpolant(double(wrf_lon_good(:)),double(wrf_lat_good(:)),double(wrf_tropo_good(:)),'nearest');
+            indx = isnan(wrf_tropopres);
+            wrf_lon_bad = wrf_lon(indx);
+            wrf_lat_bad = wrf_lat(indx);
+            wrf_tropopres(indx) = TropoScatObj(double(wrf_lon_bad(:)),double(wrf_lat_bad(:)));
+            wrf_tropopres(2:end-1,2:end-1) = tp_nonbc;
+                
+            %%% interpolate the rest of domain    
+
             indx = ~isnan(wrf_tropopres);
             wrf_lon_good = wrf_lon(indx);
             wrf_lat_good = wrf_lat(indx);

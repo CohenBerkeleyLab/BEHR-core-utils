@@ -9,6 +9,11 @@ function [ wrf_path ] = find_wrf_path( region, profile_mode, this_date, varargin
 %   error is thrown. It does not verify that the required wrfout files are
 %   actually present. THIS_DATE must be either a date number or date string
 %   implicitly understood by Matlab.
+%
+%   WRF_PATH = FIND_WRF_PATH( REGION, PROFILE_MODE, THIS_DATE, 'fullpath' )
+%   will include the file corresponding to the given date. Note that it
+%   offers no guarantee that file exists; it will return the file for the
+%   exact hour/minute/second requested.
 
 E = JLLErrors;
 
