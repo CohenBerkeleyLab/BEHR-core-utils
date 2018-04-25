@@ -97,6 +97,18 @@ end
 % called: the variable name and the file name.
 E.addCustomError('ncvar_not_found','The variable %s is not defined in the file %s. Likely this file was not processed with (slurm)run_wrf_output.sh, or the processing failed before writing the calculated quantites.');
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% CHECK DEPENDENCIES %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+G = GitChecker;
+% Require that WRF_Utils has the version of find_wrf_tropopause that has
+% been updated to identify jumps in the tropopause pressure and the general
+% utils have been updated to include the floodfill algorithm needed by 
+% find_wrf_tropopause.
+G.addReqCommits(behr_paths.wrf_utils, '9272d08');
+G.addReqCommits(behr_paths.utils, '51a0869');
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%% INPUT CHECKING %%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -298,7 +310,7 @@ end
         day_in = day(date_num_in);
         
         omi_utc_mean = omi_time_conv(nanmean(omi_time(:)));
-        utc_hr = round(hour(omi_utc_mean));
+        utc_hr = round(hour(omi_utc_mean) + minute(omi_utc_mean)/60);
         if strcmpi(profile_mode, 'daily')
             file_name = sprintf('wrfout_*_%04d-%02d-%02d_%02d-00-00', year_in, month_in, day_in, utc_hr);
             % Allow for the possibility that the filenames are "unsanitized" and have colons in them still

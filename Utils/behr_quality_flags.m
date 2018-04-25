@@ -133,11 +133,11 @@ set_flags(data.AlbedoOceanFlag, 18, false, false, 'Ocean Albedo Flag: surface al
 set_flags(data.MODISAlbedoQuality >= 2.5 | data.MODISAlbedoFillFlag, 19, true, false, 'MODIS BRDF quality worse than ( >= ) 2.5 or > 50% of MODIS grid cells had fill value');
 
 % Set a warning if the cloud pressure is smaller than tropopause pressure
-set_flags(data.TropoPresVSCldPres, 19, false, false, 'Cloud pressure is smaller than tropopause pressure');
+set_flags(data.TropoPresVSCldPres, 20, false, false, 'Cloud pressure is smaller than tropopause pressure');
 
 % Set a warning if the wrf tropopause pressure is not calculated by lapse
 % rate but interpolated from neighboring points
-set_flags(data.Interp_TropopausePressure, 20, false, false, 'Tropopause Presssure is interpolated from neighboring points as no point with a lapse rate < 2 K/km is found');
+set_flags(data.Interp_TropopausePressure, 21, false, false, 'Tropopause Presssure is interpolated from neighboring points as no point with a lapse rate < 2 K/km is found');
 
     function set_flags(bool_mask, bit, bad_to_ground_quality, is_error, explanation_string)
         % This nested subfunction should always be used to set the flags.
