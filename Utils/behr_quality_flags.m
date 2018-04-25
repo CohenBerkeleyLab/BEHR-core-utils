@@ -43,7 +43,8 @@ function [ behr_flags, flags_meaning ] = behr_quality_flags( data )
 %       * MODISAlbedoQuality
 %       * MODISAlbedoFillFlag
 %       * CloudFraction
-%
+%       * TropoPresVSCldPres
+%       * InterpolatedTropopausePressure
 %   [ ___, FLAG_MEANING ] = BEHR_QUALITY_FLAGS( DATA )
 %   [  ~ , FLAG_MEANING ] = BEHR_QUALITY_FLAGS() The second output is a
 %   cell array giving the meaning of each flag bit. This is output either
@@ -58,7 +59,7 @@ E = JLLErrors;
 % are in data, or used to set default values if the user just needs the
 % flag meaning.
 req_fields = {'BEHRAMFTrop', 'BEHRAMFTropVisOnly', 'VcdQualityFlags', 'XTrackQualityFlags',...
-    'AlbedoOceanFlag', 'MODISAlbedoQuality', 'MODISAlbedoFillFlag', 'CloudFraction'};
+    'AlbedoOceanFlag', 'MODISAlbedoQuality', 'MODISAlbedoFillFlag', 'CloudFraction', 'TropoPresVSCldPres','Interp_TropopausePressure'};
 
 if nargin == 0    
     % If given no arguments, we must just want the flag meanings, so create
@@ -103,9 +104,14 @@ set_flags(data.BEHRAMFTrop <= behr_min_amf_val() | isnan(data.BEHRAMFTrop)...
 % own quality summary flag was set)
 set_flags(mod(data.VcdQualityFlags, 2) ~= 0, 4, true, true, 'VcdQualityFlags: NASA summary flag set');
 
-% Set an error flag if the XTrackQualityFlags fields is ~= 0, i.e. it has
-% been affected by the row anomaly
-set_flags(data.XTrackQualityFlags ~= 0, 5, true, true, 'XTrackQualityFlags: NASA flag > 0');
+% Set an error flag if the XTrackQualityFlags fields is > 0, i.e. it has
+% been affected by the row anomaly. Had to switch away from ~= 0 because
+% NaN ~= 0 will return true, but NaN > 0 will return false. For early files
+% (~2006 to ~Nov 2008 last I checked), the XTrackQualityFlags fields seems
+% to have all fill values, for orbits not affected by the row anomaly, so
+% this relies on fill values being imported as NaNs and thus not triggering
+% this logical test.
+set_flags(data.XTrackQualityFlags > 0, 5, true, true, 'XTrackQualityFlags: NASA flag > 0');
 
 
 %%%%%%%%%%%%%%%%%
@@ -124,9 +130,14 @@ set_flags(data.AlbedoOceanFlag, 18, false, false, 'Ocean Albedo Flag: surface al
 % "mixed, <= 75% full inversions and <= 25% fill values". Having the cut
 % off be 2.5 will all some poor quality MODIS BRDFs to contribute to the
 % surface reflectance without automatically flagging it as poor quality.
-set_flags(data.MODISAlbedoQuality >= 2.5 | data.MODISAlbedoFillFlag, 19, false, false, 'MODIS BRDF quality worse than ( >= ) 2.5 or > 50% of MODIS grid cells had fill value');
+set_flags(data.MODISAlbedoQuality >= 2.5 | data.MODISAlbedoFillFlag, 19, true, false, 'MODIS BRDF quality worse than ( >= ) 2.5 or > 50% of MODIS grid cells had fill value');
 
+% Set a warning if the cloud pressure is smaller than tropopause pressure
+set_flags(data.TropoPresVSCldPres, 20, false, false, 'Cloud pressure is smaller than tropopause pressure');
 
+% Set a warning if the wrf tropopause pressure is not calculated by lapse
+% rate but interpolated from neighboring points
+set_flags(data.Interp_TropopausePressure, 21, false, false, 'Tropopause Presssure is interpolated from neighboring points as no point with a lapse rate < 2 K/km is found');
 
     function set_flags(bool_mask, bit, bad_to_ground_quality, is_error, explanation_string)
         % This nested subfunction should always be used to set the flags.
@@ -179,10 +190,12 @@ set_flags(data.MODISAlbedoQuality >= 2.5 | data.MODISAlbedoFillFlag, 19, false, 
         
         behr_flags = bitset(behr_flags, bit, bool_mask);
         if is_error
-            behr_flags = bitset(behr_flags, 2, bool_mask);
+            error_mask = bool_mask | bitand(behr_flags, 2);
+            behr_flags = bitset(behr_flags, 2, error_mask);
         end
         if is_error || bad_to_ground_quality
-            behr_flags = bitset(behr_flags, 1, bool_mask);
+            bad_qual_mask = bool_mask | bitand(behr_flags,1);
+            behr_flags = bitset(behr_flags, 1, bad_qual_mask);
         end
         flags_meaning{bit} = sprintf('%d: %s', bit, explanation_string);
     end

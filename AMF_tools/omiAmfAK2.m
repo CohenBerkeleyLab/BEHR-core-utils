@@ -7,6 +7,7 @@
 %   INPUTS:
 %       pTerr - the 2D array of pixel surface pressures
 %       pCld - the 2D array of pixel cloud pressures
+%       pTropo - the 2D array of tropopause pressures
 %       cldFrac - the 2D array of pixel geometric cloud fractions (field: CloudFraction)
 %       cldRadFrac - the 2D array of pixel radiance cloud fractions (field: CloudRadianceFraction)
 %       pressure - the vector of standard pressures to expect the scattering weights and profiles at
@@ -81,7 +82,7 @@
 %
 %   Josh Laughner <joshlaugh5@gmail.com> 
 
-function [amf, amfVis, amfCld, amfClr, sc_weights, avgKernel, no2ProfileInterp, swPlev ] = omiAmfAK2(pTerr, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile)
+function [amf, amfVis, amfCld, amfClr, sc_weights_clr, sc_weights_cld, avgKernel, no2ProfileInterp, swPlev ] = omiAmfAK2(pTerr, pTropo, pCld, cldFrac, cldRadFrac, pressure, dAmfClr, dAmfCld, temperature, no2Profile)
 
 
 % Each profile is expected to be a column in the no2Profile matrix.  Check
@@ -99,15 +100,17 @@ if size(temperature,1) ~= length(pressure)
 end
 
 alpha = 1 - 0.003 * (temperature - 220);   % temperature correction factor vector
-alpha_i=max(alpha,0.1);
-alpha = min(alpha_i,10);
+% Keep NaNs in alpha, that way the scattering weights will be fill values
+% for levels where we don't have temperature data.
+alpha_i=max(alpha,0.1,'includenan');
+alpha = min(alpha_i,10,'includenan');
 
 
 % Integrate to get clear and cloudy AMFs
-vcdGnd=zeros(size(pTerr));
-vcdCld=zeros(size(pTerr));
-amfClr=zeros(size(pTerr));
-amfCld=zeros(size(pTerr));
+vcdGnd=nan(size(pTerr));
+vcdCld=nan(size(pTerr));
+amfClr=nan(size(pTerr));
+amfCld=nan(size(pTerr));
 
 
 % JLL 18 May 2015:
@@ -116,30 +119,48 @@ amfCld=zeros(size(pTerr));
 % vectors into a matrix (integPr2 will return a shorter vector if one or
 % both of the pressures to interpolate to is already in the pressure
 % vector). We add two to the first dimension of these matrices to make room
-% for the two interpolated pressures.
+% for the three interpolated pressures.
 padvec = zeros(1,ndims(no2Profile));
-padvec(1) = 2;
-swPlev=zeros(size(no2Profile)+padvec);
-swClr=zeros(size(no2Profile)+padvec);
-swCld=zeros(size(no2Profile)+padvec);
-no2ProfileInterp=zeros(size(no2Profile)+padvec);
+padvec(1) = 3;
+swPlev=nan(size(no2Profile)+padvec);
+swClr=nan(size(no2Profile)+padvec);
+swCld=nan(size(no2Profile)+padvec);
+no2ProfileInterp=nan(size(no2Profile)+padvec);
 nP = size(swPlev,1);
 
 
 for i=1:numel(pTerr)
-    vcdGnd(i) = integPr2(no2Profile(:,i), pressure, pTerr(i));  
-    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0;
-        vcdCld(i) = integPr2(no2Profile(:,i), pressure, pCld(i));
+    no2Profile_i = no2Profile(:,i);
+    clearSW_i = no2Profile(:,i) .* dAmfClr(:,i) .* alpha(:,i);
+    cloudySW_i = (no2Profile(:,i) .* dAmfCld(:,i) .* alpha(:,i));
+    
+    if all(isnan(no2Profile_i)) || all(isnan(clearSW_i)) || all(isnan(cloudySW_i))
+        % 16 Apr 2018: found that AMFs were still being calculated if all
+        % of one type of scattering weight was NaNs, but not the other.
+        % This happens when, e.g., the MODIS albedo is a NaN so the clear
+        % sky scattering weights are all NaNs but the cloudy ones are not.
+        % That leads to a weird case where a pixel that is not necessarily
+        % 100% cloudy is being calculated with a 0 for the clear sky AMF.
+        % This is undesired behavior, we would rather just not retrieve
+        % pixels for which we do not have surface data.
+        continue
+    end
+    
+    vcdGnd(i) = integPr2(no2Profile(:,i), pressure, pTerr(i), pTropo(i), 'fatal_if_nans', true);
+    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0 && pCld(i)>pTropo(i)
+        vcdCld(i) = integPr2(no2Profile(:,i), pressure, pCld(i), pTropo(i), 'fatal_if_nans', true);
     else
         vcdCld(i)=0;
     end
-    if cldFrac(i) ~= 1 && cldRadFrac(i) ~= 1;
-        amfClr(i) = integPr2((no2Profile(:,i).*dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i)) ./ vcdGnd(i);
+    
+    if cldFrac(i) ~= 1 && cldRadFrac(i) ~= 1
+        amfClr(i) = integPr2(clearSW_i, pressure, pTerr(i), pTropo(i), 'fatal_if_nans', true) ./ vcdGnd(i);
     else
         amfClr(i)=0;
     end
-    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0;
-        cldSCD=integPr2((no2Profile(:,i).*dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i));
+    
+    if cldFrac(i) ~= 0 && cldRadFrac(i) ~= 0 && pCld(i)>pTropo(i)
+        cldSCD=integPr2(cloudySW_i, pressure, pCld(i), pTropo(i), 'fatal_if_nans', true);
         amfCld(i) = cldSCD ./ vcdGnd(i);
     else
         amfCld(i)=0;
@@ -148,11 +169,13 @@ for i=1:numel(pTerr)
     
     % JLL 19 May 2015:
     % Added these lines to interpolate to the terrain & cloud pressures and
-    % output a vector - this results in better agreement between our AMF and
-    % the AMF calculated from "published" scattering weights.
-    [~, ~, this_no2ProfileInterp] = integPr2(no2Profile(:,i), pressure, pTerr(i), [pTerr(i), pCld(i)]);
-    [~,this_swPlev,this_swClr] = integPr2((dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i), [pTerr(i), pCld(i)]);
-    [~,~,this_swCld] = integPr2((dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i), [pTerr(i), pCld(i)]);
+    % output a vector - this resulted in better agreement between our AMF and
+    % the AMF calculated from "published" scattering weights when we
+    % published unified scattering weights, so this probably still helps
+    % with the averaging kernels
+    [~, ~, this_no2ProfileInterp] = integPr2(no2Profile(:,i), pressure, pTerr(i), pTropo(i), 'interp_pres', [pTerr(i), pCld(i),pTropo(i)], 'fatal_if_nans', true);
+    [~,this_swPlev,this_swClr] = integPr2((dAmfClr(:,i).*alpha(:,i)), pressure, pTerr(i), pTropo(i), 'interp_pres', [pTerr(i), pCld(i),pTropo(i)], 'fatal_if_nans', true);
+    [~,~,this_swCld] = integPr2((dAmfCld(:,i).*alpha(:,i)), pressure, pCld(i), pTropo(i), 'interp_pres', [pTerr(i), pCld(i),pTropo(i)], 'fatal_if_nans', true);
     
     if ~iscolumn(this_swPlev)
         E.badvar('this_swPlev','Must be a column vector');
@@ -241,6 +264,8 @@ amfVis(~isnan(amfVis)) = max(amfVis(~isnan(amfVis)), behr_min_amf_val());
 % algorithm
 avgKernel = nan(size(swPlev));
 sc_weights = nan(size(swPlev));
+sc_weights_clr = swClr;
+sc_weights_cld = swCld;
 
 for i=1:numel(pTerr)
    % JLL 19 May 2015 - pull out the i'th vector, this will allow us
@@ -250,22 +275,29 @@ for i=1:numel(pTerr)
    swPlev_i = swPlev(:,i);
    swClr_i = swClr(:,i);
    swCld_i = swCld(:,i);
-   not_nans_i = ~isnan(swPlev_i) & ~isnan(swClr_i) & ~isnan(swCld_i);
-   if ~all(not_nans_i == (~isnan(swPlev_i) | ~isnan(swClr_i) | ~isnan(swCld_i))) && ~all(isnan(swPlev_i)) && ~all(isnan(swClr_i)) && ~all(isnan(swCld_i))
-       % Error called if there are NaNs present in some but not all
-       % of these vectors AND none of the vectors is all NaNs
-       % If one of the vectors is all NaNs, then the mismatch is
-       % okay because the AMF will just end up being a NaN anyway - 
+   not_nans_i = ~isnan(swClr_i) & ~isnan(swCld_i);
+   if ~all(not_nans_i == (~isnan(swClr_i) | ~isnan(swCld_i)))
+       % Error called if there are NaNs present in one but not both of
+       % these vectors. Previously had checked if the NaNs matched those in
+       % the pressure levels, but once I fixed it so that alpha retained
+       % NaNs that were in temperature, that was no longer useful, since
+       % pressure will never have NaNs unless they were appended to ensure
+       % equal length vectors when surface, cloud, or tropopause pressure
+       % are one of the standard pressures, but the scattering weights will
+       % have NaNs where the WRF temperature profile doesn't reach.
        E.callError('nan_mismatch','NaNs are not the same in the swPlev, swClr, and swCld vectors');
    end
    
    ii = swPlev_i > pTerr(i) & ~isnan(swPlev_i);
+   sc_weights_clr(ii,i) = 1e-30; 
    swClr_i(ii)=1e-30;
    
    ii = swPlev_i > pCld(i) & ~isnan(swPlev_i);
    swCld_i(ii)=1e-30;
+   sc_weights_cld(ii,i) = 1e-30;
 
-   % Added 14-15 May 2015 to handle outputting scattering weights
+   % 17 Nov 2017 - switched to outputting separate clear and cloudy
+   % scattering weights
    sc_weights(:,i) = (cldRadFrac(i).*swCld_i + (1-cldRadFrac(i)).*swClr_i);
    
    avgKernel(:,i) = sc_weights(:,i) ./ amf(i); % JLL 19 May 2015 - changed to use the scattering weights we're already calculating.

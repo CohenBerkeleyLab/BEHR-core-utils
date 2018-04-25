@@ -1,6 +1,10 @@
 function [  ] = plot_temp_profs( month_in )
-%UNTITLED2 Summary of this function goes here
-%   Detailed explanation goes here
+%PLOT_TEMP_PROFS Plot the NASA temperature profiles for one month
+%   PLOT_TEMP_PROFS( MONTH_IN ) Given the numeric MONTH_IN, plots the NASA
+%   temperature profiles using PLOT_SLICE_GUI() (general utils repo). This
+%   was used to verify that the temperature profiles were being assigned
+%   wrong in v2.1C.
+
 E = JLLErrors;
 Grid = GlobeGrid(5,2);
 if ~exist('month_in', 'var')

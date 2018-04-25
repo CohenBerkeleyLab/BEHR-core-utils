@@ -64,24 +64,26 @@ build_omi_python();
         % will make behr_paths aware that the directory given contains
         % code, and should be added to the Matlab path on request. If its
         % value is the string 'norecurse', only that directory (and not its
-        % subfolders) will be added to the path.
+        % subfolders) will be added to the path. Likewise, if "is_pypath"
+        % is a field, it will be aware that this path contains Python code
+        % and should be added to the Python path by SetPythonPath().
         
         sat_file_server = '128.32.208.13';
         wrf_file_server = 'cohenwrfnas.dyn.berkeley.edu';
         
         if ismac
             sat_folder = fullfile('/Volumes','share-sat');
-            wrf1_folder = fullfile('/Volumes', 'share-wrf1');
-            wrf2_folder = fullfile('/Volumes', 'share-wrf2');
+            wrf1_folder = fullfile('/Volumes', 'share-wrf1','BEHR-WRF');
+            wrf2_folder = fullfile('/Volumes', 'share-wrf2','BEHR-WRF');
         elseif isunix
             sat_folder = fullfile('/mnt','share-sat');
-            wrf1_folder = fullfile('/mnt', 'share-wrf1');
-            wrf2_folder = fullfile('/mnt', 'share-wrf2');
+            wrf1_folder = fullfile('/mnt', 'share-wrf1','BEHR-WRF');
+            wrf2_folder = fullfile('/mnt', 'share-wrf2','BEHR-WRF');
         elseif ispc
             drive_letter_request = 'Enter the drive letter (just the letter, not the ":\" that "%s" is mounted as';
             sat_folder = strcat(input(sprintf(drive_letter_request, 'share-sat'), 's'), ':');
-            wrf1_folder = strcat(input(sprintf(drive_letter_request, 'share-wrf1'), 's'), ':');
-            wrf2_folder = strcat(input(sprintf(drive_letter_request, 'share-wrf2'), 's'), ':');
+            wrf1_folder = strcat(input(sprintf(drive_letter_request, 'share-wrf1','BEHR-WRF'), 's'), ':');
+            wrf2_folder = strcat(input(sprintf(drive_letter_request, 'share-wrf2','BEHR-WRF'), 's'), ':');
         end
             
         
@@ -102,6 +104,7 @@ build_omi_python();
         paths.psm_dir.comment = 'The PSM Gridding repository. It should contain the files PSM_Main.py and psm_wrapper.m. May be cloned from https://github.com/CohenBerkeleyLab/BEHR-PSM-Gridding';
         paths.psm_dir.default = fullfile(behr_utils_repo_path, '..', 'BEHR-PSM-Gridding');
         paths.psm_dir.is_code_dir = 'norecurse';
+        paths.psm_dir.is_pypath = true;
         paths.python_interface.comment = 'The MatlabPythonInterface repository. May be cloned from https://github.com/CohenBerkeleyLab/MatlabPythonInterface';
         paths.python_interface.default = fullfile(behr_utils_repo_path, '..', 'MatlabPythonInterface');
         paths.python_interface.is_code_dir = true;
@@ -198,32 +201,52 @@ build_omi_python();
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     function build_omi_python
         fprintf('\n');
-        build_omi_cmd = 'python setup.py install --user';
+        % Get the version of python that Matlab will use
+        [~, py_exe] = pyversion;
+        build_omi_cmd = sprintf('%s setup.py build', py_exe);
+        install_omi_cmd = sprintf('%s setup.py install --user', py_exe);
         psm_dir = fullfile(behr_paths.psm_dir, 'omi');
         
         if exist(psm_dir, 'dir')
             fprintf('BEHR relies on the omi Python package. This needs to be built and installed on your Python path.\n');
-            fprintf('I can try to do this for you; I would run:\n\n\t%s\n\nin %s\n', build_omi_cmd, behr_paths.psm_dir);
+            fprintf('I can try to do this for you; I would run:\n\n\t%s\n\nfollowed by\n\n\t%s\n\nin %s\n\n', build_omi_cmd, install_omi_cmd, psm_dir);
+            fprintf('I am using the Python executable that Matlab will use. You can change this with the pyversion() function.\n\n');
+            fprintf('If you change Python versions for Matlab, you should rebuild the omi package. To do a completely clean build,\ndelete the "build" folder in %s\n\n', psm_dir);
             fprintf('Should I try to build the omi package? If not, you can do it manually later.\n');
-            if strcmpi(input('  Enter y to build, anything else to skip: ', 's'), 'y');
+            if strcmpi(input('  Enter y to build, anything else to skip: ', 's'), 'y')
                 fprintf('Trying to build the omi package...\n');
                 oldwd = cd(psm_dir);
                 try
-                    [psm_status, psm_result] = system(build_omi_cmd);
+                    [build_status, build_result] = system(build_omi_cmd);
+                catch err
+                    cd(oldwd);
+                    rethrow(err);
+                end
+                
+                if build_status == 0
+                    fprintf('%s\n\n', build_result)
+                else
+                    fprintf('Build failed. Output from build command:\n%s\n', build_result);   
+                end
+                
+                try
+                    [install_status, install_result] = system(install_omi_cmd);
                 catch err
                     cd(oldwd);
                     rethrow(err);
                 end
                 cd(oldwd);
                 
-                if psm_status == 0
-                    fprintf('%s\n\n', psm_result);
+                if install_status == 0
+                    fprintf('%s\n\n', install_result);
                     fprintf('Build appears to be successful.\n');
                 else
-                    fprintf('Build failed. Output from install command:\n%s\n', psm_result);
+                    fprintf('Build failed. Output from install command:\n%s\n', install_result);
                 end
             else
-                fprintf('To build the omi package yourself, execute "%s" in %s\n', build_omi_cmd, psm_dir);
+                fprintf('\nTo build the omi package yourself, execute "%s" followed by "%s"\nin %s\n\n', build_omi_cmd, install_omi_cmd, psm_dir);
+                fprintf('Note that your PATH and PYTHONPATH environmental variables may differ in the Terminal vs. the GUI Matlab.\n');
+                fprintf('If you experience difficultly with the PSM package after building in the Terminal, try building from Matlab instead.\n');
             end
         else
             fprintf('The PSM directory (%s) in behr_paths is invalid. Fix that and rerun BEHR_initial_setup, or build the omi package manually.\n', behr_paths.psm_dir);
@@ -287,10 +310,13 @@ end
 function write_iscodedir_structs(paths, fid)
 iscodedir_fxn = @(path_struct) isfield(path_struct, 'is_code_dir');
 do_genpath_fxn = @(path_struct) isfield(path_struct, 'is_code_dir') && ~strcmpi(path_struct.is_code_dir, 'norecurse');
+is_pypath_fxn = @(path_struct) isfield(path_struct, 'is_pypath');
 
 write_bool_structure(paths, fid, 'is_code_dir', iscodedir_fxn);
 fprintf(fid, '\n');
 write_bool_structure(paths, fid, 'do_genpath', do_genpath_fxn);
+fprintf(fid, '\n');
+write_bool_structure(paths, fid, 'is_pypath', is_pypath_fxn);
 end
 
 function write_bool_structure(paths, fid, struct_name, bool_fxn)

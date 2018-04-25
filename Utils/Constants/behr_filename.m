@@ -29,17 +29,30 @@ function [ fname ] = behr_filename( date_in, prof_mode, region, ext, behr_versio
 %   to DIR() in order to get a list of files that match for the given
 %   DATE_IN, which can help you write functions that work for any region,
 %   profile mode, or version.
+%
+%   An alternate syntax exists to generate older filenames that do not
+%   include the region and profile mode:
+%
+%   FNAME = BEHR_FILENAME( DATE_IN, 'prefix', PREFIX, EXT, BEHR_VERSION )
+%   will use PREFIX as the string to insert before the version string, i.e.
+%   FNAME will behr PREFIX_VERSION_DATESTR.EXT
 
 E = JLLErrors;
 
-if ~exist('prof_mode', 'var')
-    prof_mode = '*';
+if strcmpi(prof_mode, 'prefix')
+    prefix = region;
+else
+    if ~exist('prof_mode', 'var')
+        prof_mode = '*';
+    end
+    
+    if ~exist('region', 'var')
+        region = '*';
+    end
+    
+    prefix = sprintf('OMI_BEHR-%s_%s', upper(prof_mode), upper(region));
 end
-
-if ~exist('region', 'var')
-    region = '*';
-end
-
+    
 if ~exist('ext','var')
     ext = 'mat';
 else
@@ -60,8 +73,15 @@ elseif behr_version
 else
     ver_str = BEHR_version();
 end
+    
 
-fname = sprintf('OMI_BEHR-%s_%s_%s_%s.%s', upper(prof_mode), upper(region), ver_str, datestr(date_in, 'yyyymmdd'), ext);
+
+if ischar(date_in) && strcmp(date_in, '*')
+    date_string = date_in;
+else
+    date_string = datestr(date_in, 'yyyymmdd');
+end
+fname = sprintf('%s_%s_%s.%s', prefix, ver_str, date_string, ext);
 
 end
 
