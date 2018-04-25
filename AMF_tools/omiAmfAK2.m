@@ -7,6 +7,7 @@
 %   INPUTS:
 %       pTerr - the 2D array of pixel surface pressures
 %       pCld - the 2D array of pixel cloud pressures
+%       pTropo - the 2D array of tropopause pressures
 %       cldFrac - the 2D array of pixel geometric cloud fractions (field: CloudFraction)
 %       cldRadFrac - the 2D array of pixel radiance cloud fractions (field: CloudRadianceFraction)
 %       pressure - the vector of standard pressures to expect the scattering weights and profiles at
@@ -118,7 +119,7 @@ amfCld=nan(size(pTerr));
 % vectors into a matrix (integPr2 will return a shorter vector if one or
 % both of the pressures to interpolate to is already in the pressure
 % vector). We add two to the first dimension of these matrices to make room
-% for the two interpolated pressures.
+% for the three interpolated pressures.
 padvec = zeros(1,ndims(no2Profile));
 padvec(1) = 3;
 swPlev=nan(size(no2Profile)+padvec);
