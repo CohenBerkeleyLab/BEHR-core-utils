@@ -75,6 +75,7 @@ E = JLLErrors;
 parser = inputParser;
 parser.addOptional('wrf_output_path', '', @ischar);
 parser.addParameter('err_missing_att', true);
+parser.addParameter('clip_at_int_limits', true);
 parser.addParameter('DEBUG_LEVEL', 1);
 
 parser.parse(varargin{:});
@@ -83,6 +84,7 @@ pout = parser.Results;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 error_if_missing_attr = pout.err_missing_att;
 wrf_output_path = pout.wrf_output_path;
+clip_at_int_limits = pout.clip_at_int_limits;
 
 if ~isnumeric(DEBUG_LEVEL) || ~isscalar(DEBUG_LEVEL)
     E.badinput('DEBUG_LEVEL must be a scalar number')
@@ -288,14 +290,16 @@ end
         % do not need exp(interp_temp) since did not take the log of
         % tmp_temp
         
-        last_below_surf = find(pressures > surfPres(p),1,'last')-1;
-        interp_no2(1:last_below_surf,:) = nan;
-        interp_temp(1:last_below_surf,:) = nan;
-        
         pTropo = nanmean(tmp_pTropo);
-        last_up_tropo = find(pressures < pTropo,1,'first')+1;
-        interp_no2(last_up_tropo:end,:) = nan;
-        interp_temp(last_up_tropo:end,:) = nan;
+        
+        if clip_at_int_limits
+            last_below_surf = find(pressures > surfPres(p),1,'last')-1;
+            interp_no2(1:last_below_surf,:) = nan;
+            interp_temp(1:last_below_surf,:) = nan;
+            last_up_tropo = find(pressures < pTropo,1,'first')+1;
+            interp_no2(last_up_tropo:end,:) = nan;
+            interp_temp(last_up_tropo:end,:) = nan;
+        end
         
         no2_vec = nanmean(interp_no2,2);
         temp_vec = nanmean(interp_temp,2);
