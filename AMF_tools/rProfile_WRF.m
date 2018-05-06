@@ -254,6 +254,8 @@ end
             no2_vec = nan(length(pressures),1);
             temp_vec = nan(length(pressures),1);
             pTropo = nan;
+            pSurf = nan;
+            pSurf_WRF = nan;
             return
         end
         
@@ -269,7 +271,7 @@ end
         h_globe = -7400 .* log(globe_surfPres(p) ./ 1013.25);
         t_surf = nanmean(tmp_temp(1,:));
         R = 287; % J/kg/K, gas constant for dry air
-        gamma = 6500; % K/m, lapse rate
+        gamma = 6.5/1000; % K/m, lapse rate
         g = 9.8; % m/s^2, gravitational acceleration
         pSurf_WRF = nanmean(tmp_pres(1,:));
         pSurf = pSurf_WRF .* (t_surf ./ (t_surf + gamma .* (h_wrf - h_globe))) .^ (-g ./ (R .* gamma));
@@ -308,7 +310,7 @@ end
         pTropo = nanmean(tmp_pTropo);
         
         if clip_at_int_limits
-            last_below_surf = find(pressures > globe_surfPres(p),1,'last')-1;
+            last_below_surf = find(pressures > pSurf,1,'last')-1;
             interp_no2(1:last_below_surf,:) = nan;
             interp_temp(1:last_below_surf,:) = nan;
             last_up_tropo = find(pressures < pTropo,1,'first')+1;
