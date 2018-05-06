@@ -1,4 +1,4 @@
-function [ no2_bins, temp_bins, wrf_file, SurfPres, SurfPres_WRF, TropoPres, tropopause_interp_flag, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, globe_surfPres, pressures, varargin )
+function [ no2_bins, temp_bins, wrf_file, SurfPres, SurfPres_WRF, TropoPres, tropopause_interp_flag, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, globe_elevation, pressures, varargin )
 
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
@@ -122,11 +122,11 @@ elseif ndims(loncorns) ~= ndims(latcorns) || ~all(size(loncorns) == size(latcorn
 end
 
 sz_corners = size(loncorns);
-sz_surfPres = size(globe_surfPres);
+sz_surfPres = size(globe_elevation);
 
 % Check that the corner arrays and the surfPres array represent the same
 % number of pixels
-if ndims(loncorns)-1 ~= ndims(globe_surfPres) || ~all(sz_corners(2:end) == sz_surfPres(1:end))
+if ndims(loncorns)-1 ~= ndims(globe_elevation) || ~all(sz_corners(2:end) == sz_surfPres(1:end))
     E.badinput('The size of the surfPres array must be the same as the corner arrays without their first dimension (size(surfPres,1) == size(loncorns,2, etc)')
 end
 
@@ -167,13 +167,14 @@ end
 [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres, wrf_surf_elev, pres_mode, temp_mode,tropopause_interp_indx] = load_wrf_vars();
 num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
-num_pix = numel(globe_surfPres);
-no2_bins = nan(length(pressures), size(globe_surfPres,1), size(globe_surfPres,2));
-temp_bins = nan(length(pressures), size(globe_surfPres,1), size(globe_surfPres,2));
-SurfPres = nan(size(globe_surfPres));
-SurfPres_WRF = nan(size(globe_surfPres));
-TropoPres = nan(size(globe_surfPres));
-tropopause_interp_flag = false(size(globe_surfPres));
+
+num_pix = numel(globe_elevation);
+no2_bins = nan(length(pressures), size(globe_elevation,1), size(globe_elevation,2));
+temp_bins = nan(length(pressures), size(globe_elevation,1), size(globe_elevation,2));
+SurfPres = nan(size(globe_elevation));
+SurfPres_WRF = nan(size(globe_elevation));
+TropoPres = nan(size(globe_elevation));
+tropopause_interp_flag = false(size(globe_elevation));
 
 if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
     error('rProfile_WRF:wrf_dim','wrf_lon and wrf_lat should be 2D');
@@ -268,7 +269,7 @@ end
         % Scale the WRF surface pressure using the hypsometric equation and
         % the GLOBE terrain height.
         h_wrf = nanmean(tmp_elev);
-        h_globe = -7400 .* log(globe_surfPres(p) ./ 1013.25);
+        h_globe = globe_elevation(p);
         t_surf = nanmean(tmp_temp(1,:));
         R = 287; % J/kg/K, gas constant for dry air
         gamma = 6.5/1000; % K/m, lapse rate
