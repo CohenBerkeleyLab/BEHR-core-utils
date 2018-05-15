@@ -257,48 +257,52 @@ amfVis(~isnan(amfVis)) = max(amfVis(~isnan(amfVis)), behr_min_amf_val());
 % Now compute averaging kernel %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% This is only done for the total column, on the assumption that most
-% modelers would want to compare total column against their modeled column.
-
-% These 2 sets of lines are an approximation of what is done in the OMI NO2
-% algorithm
-avgKernel = nan(size(swPlev));
-sc_weights = nan(size(swPlev));
-sc_weights_clr = swClr;
-sc_weights_cld = swCld;
-
-for i=1:numel(pTerr)
-   % JLL 19 May 2015 - pull out the i'th vector, this will allow us
-   % to remove nans for AMF calculations where needed, and also
-   % check that all vectors have NaNs in the same place.
-   
-   swPlev_i = swPlev(:,i);
-   swClr_i = swClr(:,i);
-   swCld_i = swCld(:,i);
-   not_nans_i = ~isnan(swClr_i) & ~isnan(swCld_i);
-   if ~all(not_nans_i == (~isnan(swClr_i) | ~isnan(swCld_i)))
-       % Error called if there are NaNs present in one but not both of
-       % these vectors. Previously had checked if the NaNs matched those in
-       % the pressure levels, but once I fixed it so that alpha retained
-       % NaNs that were in temperature, that was no longer useful, since
-       % pressure will never have NaNs unless they were appended to ensure
-       % equal length vectors when surface, cloud, or tropopause pressure
-       % are one of the standard pressures, but the scattering weights will
-       % have NaNs where the WRF temperature profile doesn't reach.
-       E.callError('nan_mismatch','NaNs are not the same in the swPlev, swClr, and swCld vectors');
-   end
-   
-   ii = swPlev_i > pTerr(i) & ~isnan(swPlev_i);
-   sc_weights_clr(ii,i) = 1e-30; 
-   swClr_i(ii)=1e-30;
-   
-   ii = swPlev_i > pCld(i) & ~isnan(swPlev_i);
-   swCld_i(ii)=1e-30;
-   sc_weights_cld(ii,i) = 1e-30;
-
-   % 17 Nov 2017 - switched to outputting separate clear and cloudy
-   % scattering weights
-   sc_weights(:,i) = (cldRadFrac(i).*swCld_i + (1-cldRadFrac(i)).*swClr_i);
-   
-   avgKernel(:,i) = sc_weights(:,i) ./ amf(i); % JLL 19 May 2015 - changed to use the scattering weights we're already calculating.
+if nargout > 4
+    % This is only done for the total column, on the assumption that most
+    % modelers would want to compare total column against their modeled
+    % column.
+    
+    % These 2 sets of lines are an approximation of what is done in the OMI
+    % NO2 algorithm
+    avgKernel = nan(size(swPlev));
+    sc_weights = nan(size(swPlev));
+    sc_weights_clr = swClr;
+    sc_weights_cld = swCld;
+    
+    for i=1:numel(pTerr)
+        % JLL 19 May 2015 - pull out the i'th vector, this will allow us
+        % to remove nans for AMF calculations where needed, and also
+        % check that all vectors have NaNs in the same place.
+        
+        swPlev_i = swPlev(:,i);
+        swClr_i = swClr(:,i);
+        swCld_i = swCld(:,i);
+        not_nans_i = ~isnan(swClr_i) & ~isnan(swCld_i);
+        if ~all(not_nans_i == (~isnan(swClr_i) | ~isnan(swCld_i)))
+            % Error called if there are NaNs present in one but not both of
+            % these vectors. Previously had checked if the NaNs matched
+            % those in the pressure levels, but once I fixed it so that
+            % alpha retained NaNs that were in temperature, that was no
+            % longer useful, since pressure will never have NaNs unless
+            % they were appended to ensure equal length vectors when
+            % surface, cloud, or tropopause pressure are one of the
+            % standard pressures, but the scattering weights will have NaNs
+            % where the WRF temperature profile doesn't reach.
+            E.callError('nan_mismatch','NaNs are not the same in the swPlev, swClr, and swCld vectors');
+        end
+        
+        ii = swPlev_i > pTerr(i) & ~isnan(swPlev_i);
+        sc_weights_clr(ii,i) = 1e-30;
+        swClr_i(ii)=1e-30;
+        
+        ii = swPlev_i > pCld(i) & ~isnan(swPlev_i);
+        swCld_i(ii)=1e-30;
+        sc_weights_cld(ii,i) = 1e-30;
+        
+        % 17 Nov 2017 - switched to outputting separate clear and cloudy
+        % scattering weights
+        sc_weights(:,i) = (cldRadFrac(i).*swCld_i + (1-cldRadFrac(i)).*swClr_i);
+        
+        avgKernel(:,i) = sc_weights(:,i) ./ amf(i); % JLL 19 May 2015 - changed to use the scattering weights we're already calculating.
+    end
 end
