@@ -197,6 +197,10 @@ classdef behr_paths_template
             % 'monthly'
             d = fullfile(behr_paths.behr_mat_dir, lower(region), lower(prof_mode));
         end
+        
+        function d = BEHRUncertSubdir(region)
+            d = fullfile(behr_paths.behr_mat_dir, sprintf('%s-uncertainty', lower(region)));
+        end
     end
     
     methods(Static = true, Access = private)
