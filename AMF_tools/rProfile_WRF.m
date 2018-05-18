@@ -1,4 +1,4 @@
-function [ no2_bins, temp_bins, wrf_file, TropoPres, tropopause_interp_flag, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, surfPres, pressures, varargin )
+function [ no2_bins, temp_bins, wrf_file, SurfPres, SurfPres_WRF, TropoPres, tropopause_interp_flag, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, globe_elevation, pressures, varargin )
 
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
@@ -75,6 +75,7 @@ E = JLLErrors;
 parser = inputParser;
 parser.addOptional('wrf_output_path', '', @ischar);
 parser.addParameter('err_missing_att', true);
+parser.addParameter('clip_at_int_limits', true);
 parser.addParameter('DEBUG_LEVEL', 1);
 
 parser.parse(varargin{:});
@@ -83,6 +84,7 @@ pout = parser.Results;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 error_if_missing_attr = pout.err_missing_att;
 wrf_output_path = pout.wrf_output_path;
+clip_at_int_limits = pout.clip_at_int_limits;
 
 if ~isnumeric(DEBUG_LEVEL) || ~isscalar(DEBUG_LEVEL)
     E.badinput('DEBUG_LEVEL must be a scalar number')
@@ -120,11 +122,11 @@ elseif ndims(loncorns) ~= ndims(latcorns) || ~all(size(loncorns) == size(latcorn
 end
 
 sz_corners = size(loncorns);
-sz_surfPres = size(surfPres);
+sz_surfPres = size(globe_elevation);
 
 % Check that the corner arrays and the surfPres array represent the same
 % number of pixels
-if ndims(loncorns)-1 ~= ndims(surfPres) || ~all(sz_corners(2:end) == sz_surfPres(1:end))
+if ndims(loncorns)-1 ~= ndims(globe_elevation) || ~all(sz_corners(2:end) == sz_surfPres(1:end))
     E.badinput('The size of the surfPres array must be the same as the corner arrays without their first dimension (size(surfPres,1) == size(loncorns,2, etc)')
 end
 
@@ -162,14 +164,17 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file,wrf_tropopres, pres_mode, temp_mode,tropopause_interp_indx] = load_wrf_vars();
+[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres, wrf_surf_elev, pres_mode, temp_mode,tropopause_interp_indx] = load_wrf_vars();
 num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
-num_pix = numel(surfPres);
-no2_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
-temp_bins = nan(length(pressures), size(surfPres,1), size(surfPres,2));
-TropoPres = nan(size(surfPres));
-tropopause_interp_flag = false(size(surfPres));
+
+num_pix = numel(globe_elevation);
+no2_bins = nan(length(pressures), size(globe_elevation,1), size(globe_elevation,2));
+temp_bins = nan(length(pressures), size(globe_elevation,1), size(globe_elevation,2));
+SurfPres = nan(size(globe_elevation));
+SurfPres_WRF = nan(size(globe_elevation));
+TropoPres = nan(size(globe_elevation));
+tropopause_interp_flag = false(size(globe_elevation));
 
 if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
     error('rProfile_WRF:wrf_dim','wrf_lon and wrf_lat should be 2D');
@@ -213,11 +218,11 @@ for p=1:num_pix
         continue
     end
 
-    [no2_bins(:,p), temp_bins(:,p), TropoPres(p), tropopause_interp_flag(p)] = avg_apriori();    
+    [no2_bins(:,p), temp_bins(:,p), SurfPres(p), SurfPres_WRF(p), TropoPres(p), tropopause_interp_flag(p)] = avg_apriori();    
 end
 
 
-    function [no2_vec, temp_vec, pTropo, trop_interp_flag] = avg_apriori()
+    function [no2_vec, temp_vec, pSurf, pSurf_WRF, pTropo, trop_interp_flag] = avg_apriori()
         xall = loncorns(:,p);
         xall(5) = xall(1);
         
@@ -234,6 +239,7 @@ end
         tmp_pres = wrf_pres(:,xx);
         tmp_lon = wrf_lon(xx);
         tmp_lat = wrf_lat(xx);
+        tmp_elev = wrf_surf_elev(xx);
         tmp_pTropo = wrf_tropopres(xx);
         
         if any(xx(tropopause_interp_indx))
@@ -249,13 +255,27 @@ end
             no2_vec = nan(length(pressures),1);
             temp_vec = nan(length(pressures),1);
             pTropo = nan;
+            pSurf = nan;
+            pSurf_WRF = nan;
             return
         end
         
         tmp_no2(:,~yy) = [];
         tmp_temp(:,~yy) = [];
         tmp_pres(:,~yy) = [];
+        tmp_elev(~yy) = [];
         tmp_pTropo(~yy) = [];
+        
+        % Scale the WRF surface pressure using the hypsometric equation and
+        % the GLOBE terrain height.
+        h_wrf = nanmean(tmp_elev);
+        h_globe = globe_elevation(p);
+        t_surf = nanmean(tmp_temp(1,:));
+        R = 287; % J/kg/K, gas constant for dry air
+        gamma = 6.5/1000; % K/m, lapse rate
+        g = 9.8; % m/s^2, gravitational acceleration
+        pSurf_WRF = nanmean(tmp_pres(1,:));
+        pSurf = pSurf_WRF .* (t_surf ./ (t_surf + gamma .* (h_wrf - h_globe))) .^ (-g ./ (R .* gamma));
         
         
         % Interpolate all the NO2 and temperature profiles to the input
@@ -288,21 +308,23 @@ end
         % do not need exp(interp_temp) since did not take the log of
         % tmp_temp
         
-        last_below_surf = find(pressures > surfPres(p),1,'last')-1;
-        interp_no2(1:last_below_surf,:) = nan;
-        interp_temp(1:last_below_surf,:) = nan;
-        
         pTropo = nanmean(tmp_pTropo);
-        last_up_tropo = find(pressures < pTropo,1,'first')+1;
-        interp_no2(last_up_tropo:end,:) = nan;
-        interp_temp(last_up_tropo:end,:) = nan;
+        
+        if clip_at_int_limits
+            last_below_surf = find(pressures > pSurf,1,'last')-1;
+            interp_no2(1:last_below_surf,:) = nan;
+            interp_temp(1:last_below_surf,:) = nan;
+            last_up_tropo = find(pressures < pTropo,1,'first')+1;
+            interp_no2(last_up_tropo:end,:) = nan;
+            interp_temp(last_up_tropo:end,:) = nan;
+        end
         
         no2_vec = nanmean(interp_no2,2);
         temp_vec = nanmean(interp_temp,2);
         
     end
 
-   function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres,pressure_mode, temperature_mode,tropopause_interp_indx] = load_wrf_vars()
+   function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres, wrf_elevation, pressure_mode, temperature_mode,tropopause_interp_indx] = load_wrf_vars()
        % Find the file for this day and the nearest hour May be "wrfout" or
         % "wrfout_subset"
         year_in = year(date_num_in);
@@ -394,6 +416,10 @@ end
                 pb_units = ncreadatt_default(wrf_info.Filename, 'PB', 'units', 'Pa', 'fatal_if_missing', error_if_missing_attr);
                 pressure_mode = 'online';
             end
+            
+            wrf_elevation = read_wrf_preproc(wrf_info.Filename, 'elevation');
+            wrf_elevation = wrf_elevation(:,:,1); % only need the surface elevation to adjust surface pressure
+            
             varname = 'XLONG';
             wrf_lon = ncread(wrf_info.Filename, varname);
             varname = 'XLAT';
