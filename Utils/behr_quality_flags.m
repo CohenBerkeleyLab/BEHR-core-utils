@@ -139,6 +139,12 @@ set_flags(data.TropoPresVSCldPres, 20, false, false, 'Cloud pressure is smaller 
 % rate but interpolated from neighboring points
 set_flags(data.Interp_TropopausePressure, 21, false, false, 'Tropopause Presssure is interpolated from neighboring points as no point with a lapse rate < 2 K/km is found');
 
+% NOTE: the 32nd bit is reserved for fill values. This is defined in
+% BEHR_publishing_attribute_table and used in BEHR_publishing_main when
+% creating the HDF files. Although these quality flags should never have a
+% fill value, it is good practice to leave one available. Therefore, the
+% 32nd bit should NEVER be used here.
+
     function set_flags(bool_mask, bit, bad_to_ground_quality, is_error, explanation_string)
         % This nested subfunction should always be used to set the flags.
         %
