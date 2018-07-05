@@ -26,6 +26,7 @@ p = advInputParser;
 p.addFlag('check_symlinks');
 p.addParameter('overwrite', false);
 p.addParameter('save_dir', '');
+p.addParameter('hours', 1:24);
 p.addParameter('DEBUG_LEVEL', 2);
 
 p.parse(varargin{:});
@@ -33,6 +34,7 @@ pout = p.AdvResults;
 
 check_symlinks_bool = pout.check_symlinks;
 overwrite = pout.overwrite;
+hours = pout.hours;
 save_dir = pout.save_dir;
 DEBUG_LEVEL = pout.DEBUG_LEVEL;
 
@@ -49,6 +51,10 @@ elseif ~ischar(save_dir)
     E.badinput('The parameter "save_dir" must be a string')
 elseif ~exist(save_dir, 'dir')
     E.badinput('The save directory given (%s) does not exist', save_dir);
+end
+
+if ~isnumeric(hours) || ~isrow(hours) || any(hours < 1 | hours > 24 | mod(hours,1) ~= 0)
+    E.badinput('The parameter "hours" must be a numeric row vector with integer values between 1 and 24');
 end
 
 if ~isnumeric(DEBUG_LEVEL) || ~isscalar(DEBUG_LEVEL)
@@ -80,7 +86,9 @@ lat_array = ncread(lat_info.Filename, 'LAT');
 var_mapping = struct('NO2', 'no2',...
     'T', 'T',...
     'P', 'P',...
-    'PB', 'PB');
+    'PB', 'PB',...
+    'PH', 'PH',...
+    'PHB', 'PHB');
 
 % These give the size of the CMAQ and WRF grids in the initial week of data
 % that Hugo sent. They will be used to check if the input data is from that
@@ -137,7 +145,7 @@ for d=1:numel(datevec)
     if ~exist(this_save_dir, 'dir')
         mkdir(this_save_dir)
     end
-    for h=1:24
+    for h=hours
         outfile = sprintf('wrfout_cmaq_%s_%02d-00-00', datestr(datevec(d), 'yyyy-mm-dd'), h-1);
         full_outfile = fullfile(this_save_dir, outfile);
         if exist(full_outfile, 'file')
