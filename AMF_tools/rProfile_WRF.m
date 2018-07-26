@@ -424,7 +424,7 @@ end
             wrf_lon = ncread(wrf_info.Filename, varname);
             varname = 'XLAT';
             wrf_lat = ncread(wrf_info.Filename, varname);
-            [~,wrf_tropopres] = find_wrf_tropopause( wrf_info );
+            [~,wrf_tropopres] = find_wrf_tropopause( wrf_info, 'error_if_missing_units', error_if_missing_attr );
         catch err
             if strcmp(err.identifier,'MATLAB:imagesci:netcdf:unknownLocation')
                 E.callCustomError('ncvar_not_found',varname,F(1).name);
