@@ -376,7 +376,10 @@ function check_symlink(link_file, path_date)
 % date. 
 
 E = JLLErrors;
-
+% For some reason, readlink doesn't work if you use ~ for the home
+% directory
+homedir = getenv('HOME');
+link_file = strrep(link_file, '~', homedir);
 [stat, link_path] = system(sprintf('readlink "%s"', link_file));
 if stat ~= 0
     return
