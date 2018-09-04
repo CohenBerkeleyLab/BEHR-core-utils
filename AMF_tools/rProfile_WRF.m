@@ -436,7 +436,9 @@ end
         % extrapolation wrf tropopause pressure when it's equal to 0
         tropopause_interp_indx = (wrf_tropopres == 0);
 
-        if any(tropopause_interp_indx(:)) 
+        if all(tropopause_interp_indx(:))
+            E.notimplemented('No tropopause values found - no method to recover has been implemented')
+        elseif any(tropopause_interp_indx(:)) 
             indx_nan = isnan(wrf_tropopres);
             wrf_tropopres(tropopause_interp_indx) = nan;
             
