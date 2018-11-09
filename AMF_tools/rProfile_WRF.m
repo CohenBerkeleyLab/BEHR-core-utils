@@ -1,4 +1,4 @@
-function [ no2_bins, temp_bins, wrf_file, SurfPres, SurfPres_WRF, TropoPres, tropopause_interp_flag, pres_mode, temp_mode ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, globe_elevation, pressures, varargin )
+function [ no2_bins, temp_bins, wrf_file, SurfPres, SurfPres_WRF, TropoPres, tropopause_interp_flag, pres_mode, temp_mode, extra_profiles_out ] = rProfile_WRF( date_in, profile_mode, region, loncorns, latcorns, omi_time, globe_elevation, pressures, varargin )
 
 %RPROFILE_WRF Reads WRF NO2 profiles and averages them to pixels.
 %   This function is the successor to rProfile_US and serves essentially
@@ -59,6 +59,9 @@ function [ no2_bins, temp_bins, wrf_file, SurfPres, SurfPres_WRF, TropoPres, tro
 %       string, the proper WRF directory will be found, just as if this
 %       input was omitted.
 %
+%       extra_wrf_vars: a cell array of additional variables to read from
+%       the WRF files. Variables must be 3D variables like NO2.
+%
 %
 %   Additional parameter inputs:
 %
@@ -76,6 +79,7 @@ parser = inputParser;
 parser.addOptional('wrf_output_path', '', @ischar);
 parser.addParameter('err_missing_att', true);
 parser.addParameter('clip_at_int_limits', true);
+parser.addParameter('extra_wrf_vars', {});
 parser.addParameter('DEBUG_LEVEL', 1);
 
 parser.parse(varargin{:});
@@ -85,6 +89,7 @@ DEBUG_LEVEL = pout.DEBUG_LEVEL;
 error_if_missing_attr = pout.err_missing_att;
 wrf_output_path = pout.wrf_output_path;
 clip_at_int_limits = pout.clip_at_int_limits;
+extra_wrf_varnames = pout.extra_wrf_vars;
 
 if ~isnumeric(DEBUG_LEVEL) || ~isscalar(DEBUG_LEVEL)
     E.badinput('DEBUG_LEVEL must be a scalar number')
@@ -164,7 +169,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres, wrf_surf_elev, pres_mode, temp_mode,tropopause_interp_indx] = load_wrf_vars();
+[wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres, wrf_surf_elev, pres_mode, temp_mode,tropopause_interp_indx, extra_vars] = load_wrf_vars();
 num_profs = numel(wrf_lon);
 prof_length = size(wrf_no2,3);
 
@@ -175,6 +180,7 @@ SurfPres = nan(size(globe_elevation));
 SurfPres_WRF = nan(size(globe_elevation));
 TropoPres = nan(size(globe_elevation));
 tropopause_interp_flag = false(size(globe_elevation));
+extra_profiles_out = repmat({nan(length(pressures), size(globe_elevation,1), size(globe_elevation,2))}, 1, numel(extra_wrf_varnames));
 
 if any(size(wrf_lon) < 2) || any(size(wrf_lat) < 2)
     error('rProfile_WRF:wrf_dim','wrf_lon and wrf_lat should be 2D');
@@ -211,6 +217,11 @@ wrf_lon = reshape(wrf_lon, 1, num_profs);
 wrf_lat = reshape(wrf_lat, 1, num_profs);
 wrf_tropopres = reshape(wrf_tropopres, 1, num_profs);
 
+for i_var = 1:numel(extra_vars)
+    tmp_val = permute(extra_vars{i_var}, perm_vec);
+    extra_vars{i_var} = reshape(tmp_val, prof_length, num_profs);
+end
+
 lons = squeeze(nanmean(loncorns,1));
 lats = squeeze(nanmean(latcorns,1));
 for p=1:num_pix
@@ -218,11 +229,14 @@ for p=1:num_pix
         continue
     end
 
-    [no2_bins(:,p), temp_bins(:,p), SurfPres(p), SurfPres_WRF(p), TropoPres(p), tropopause_interp_flag(p)] = avg_apriori();    
+    [no2_bins(:,p), temp_bins(:,p), SurfPres(p), SurfPres_WRF(p), TropoPres(p), tropopause_interp_flag(p), extra_var_vectors] = avg_apriori();
+    for i_var = 1:numel(extra_var_vectors)
+        extra_profiles_out{i_var}(:,p) = extra_var_vectors{i_var};
+    end
 end
 
 
-    function [no2_vec, temp_vec, pSurf, pSurf_WRF, pTropo, trop_interp_flag] = avg_apriori()
+    function [no2_vec, temp_vec, pSurf, pSurf_WRF, pTropo, trop_interp_flag, extra_vecs] = avg_apriori()
         xall = loncorns(:,p);
         xall(5) = xall(1);
         
@@ -241,6 +255,10 @@ end
         tmp_lat = wrf_lat(xx);
         tmp_elev = wrf_surf_elev(xx);
         tmp_pTropo = wrf_tropopres(xx);
+        tmp_extra_vec = cell(size(extra_vars));
+        for v = 1:numel(extra_vars)
+            tmp_extra_vec{v} = extra_vars{v}(:,xx);
+        end
         
         if any(xx(tropopause_interp_indx))
             trop_interp_flag = true;
@@ -265,6 +283,9 @@ end
         tmp_pres(:,~yy) = [];
         tmp_elev(~yy) = [];
         tmp_pTropo(~yy) = [];
+        for v = 1:numel(extra_vars)
+            tmp_extra_vec{v}(:,~yy) = [];
+        end
         
         % Scale the WRF surface pressure using the hypsometric equation and
         % the GLOBE terrain height.
@@ -296,15 +317,22 @@ end
 
         interp_no2 = nan(length(pressures), size(tmp_no2,2));
         interp_temp = nan(length(pressures), size(tmp_temp,2));
+        interp_extra = repmat({nan(length(pressures), size(tmp_no2,2))}, size(tmp_extra_vec));
         
         if ~iscolumn(pressures); pressures = pressures'; end
         
         for a=1:size(tmp_no2,2)
             interp_no2(:,a) = interp1(log(tmp_pres(:,a)), log(tmp_no2(:,a)), log(pressures), 'linear', 'extrap');
             interp_temp(:,a) = interp1(log(tmp_pres(:,a)), tmp_temp(:,a), log(pressures), 'linear', 'extrap');
+            for v = 1:numel(extra_vars)
+                interp_extra{v}(:,a) = interp1(log(tmp_pres(:,a)), log(extra_vars{v}(:,xx)), log(pressures), 'linear', 'extrap');
+            end
         end
         
         interp_no2 = exp(interp_no2);
+        for v = 1:numel(interp_extra)
+            interp_extra{v} = exp(interp_extra{v});
+        end
         % do not need exp(interp_temp) since did not take the log of
         % tmp_temp
         
@@ -314,17 +342,29 @@ end
             last_below_surf = find(pressures > pSurf,1,'last')-1;
             interp_no2(1:last_below_surf,:) = nan;
             interp_temp(1:last_below_surf,:) = nan;
+            for v = 1:numel(interp_extra)
+                interp_extra{v}(1:last_below_surf,:) = nan;
+            end
+            
             last_up_tropo = find(pressures < pTropo,1,'first')+1;
             interp_no2(last_up_tropo:end,:) = nan;
             interp_temp(last_up_tropo:end,:) = nan;
+            for v = 1:numel(interp_extra)
+                interp_extra{v}(last_up_tropo:end,:) = nan;
+            end
         end
         
         no2_vec = nanmean(interp_no2,2);
         temp_vec = nanmean(interp_temp,2);
-        
+        extra_vecs = cell(size(interp_extra));
+        for v = 1:numel(interp_extra)
+            extra_vecs{v} = nanmean(interp_extra{v},2);
+        end
     end
 
-   function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres, wrf_elevation, pressure_mode, temperature_mode,tropopause_interp_indx] = load_wrf_vars()
+   function [wrf_no2, wrf_temp, wrf_pres, wrf_lon, wrf_lat, wrf_file, wrf_tropopres,...
+           wrf_elevation, pressure_mode, temperature_mode,tropopause_interp_indx,...
+           extra_vars] = load_wrf_vars()
        % Find the file for this day and the nearest hour May be "wrfout" or
         % "wrfout_subset"
         year_in = year(date_num_in);
@@ -425,6 +465,11 @@ end
             varname = 'XLAT';
             wrf_lat = ncread(wrf_info.Filename, varname);
             [~,wrf_tropopres] = find_wrf_tropopause( wrf_info, 'error_if_missing_units', error_if_missing_attr );
+            
+            extra_vars = cell(size(extra_wrf_varnames));
+            for i_var_load = 1:numel(extra_vars)
+                extra_vars{i_var_load} = ncread(wrf_info.Filename, extra_vars{i_var_load});
+            end
         catch err
             if strcmp(err.identifier,'MATLAB:imagesci:netcdf:unknownLocation')
                 E.callCustomError('ncvar_not_found',varname,F(1).name);
